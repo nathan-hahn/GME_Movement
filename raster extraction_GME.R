@@ -16,7 +16,7 @@ library(raster)
 ####Prep data####
 
 # load RData
-df <- readRDS("GMEcollars_001_clean_2019-12-13.rds")
+df <- readRDS("./movdata/GMEcollars_001_clean_2019-12-13.rds")
 
 # summarize relocs by individual  
 df %>%
