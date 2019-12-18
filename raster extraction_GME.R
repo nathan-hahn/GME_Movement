@@ -70,6 +70,7 @@ used <- matrix(1, nrow = nrow(df), ncol = 8)
 locs <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df, 
                                proj4string = crs(study.area))
 
+# 13 minutes
 system.time({
 used[,2] <- extract(dist2ag, locs)
 used[,3] <- extract(dist2water, locs)
@@ -85,6 +86,24 @@ used[,8] <- extract(lc, locs)
 # check
 head(used)
 summary(used)
+
+
+## Extract raster covariates (in parallel) - testing
+# TODO: Adjust rasters to exact extents to make a stack
+# - dist2forest
+# - slope
+# - gHM (will need to use crop/extend)
+
+
+# s <- stack(dist2ag, dist2water, pa, lc)
+# locs2 <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df, 
+#                                 proj4string = crs(study.area))
+# # Extract
+# nCores <- parallel:detectCores() - 1
+# beginCluster(n = 7)
+# used2 <- extract(s, locs2)
+# endCluster()
+
 
 ####Add to Tracking DF####
 
@@ -139,10 +158,10 @@ used.df$merge_id <- NULL
 ####Export####
 
 # write to rds file
-outfile <- paste0("EleCollars_211119_used_", Sys.Date(), ".rds")
+outfile <- paste0("./movdata/GMEcollars_001_used_", Sys.Date(), ".rds")
 saveRDS(used.df, outfile)
 
-outfile <- paste0("EleCollars_211119_used_", Sys.Date(), ".csv")
+outfile <- paste0("./movdata/GMEcollars_001_used_", Sys.Date(), ".csv")
 write.csv(used.df, outfile)
 
 ########################################################################################################
