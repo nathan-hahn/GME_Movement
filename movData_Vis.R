@@ -5,13 +5,6 @@ library(sf)
 library(sp)
 library(mapview)
 library(anipaths)
-theme_set(  theme_bw() +
-              theme(panel.grid.major = element_blank(),
-                    strip.background = element_blank(),
-                    panel.border = element_rect(colour = "black"),
-                    strip.text = element_text(size = 12),
-                    legend.text=element_text(size=10),
-                    panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), axis.title=element_text(size=14), axis.text = element_text(size=12)))
 
 # load dataset as output from HMM.
 # viterbi is the state: 1 - encamped, 2 - foraging, 3 - exploratory
