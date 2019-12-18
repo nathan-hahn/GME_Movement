@@ -54,31 +54,32 @@ mapview(ele.sf, cex = 0.1, alpha = 0, legend = TRUE) + # for legend, make points
   mapview(ele.sf, color = "black", cex = 0.5)
 
 ## Path animation
-# library(anipaths)
-# source("~/Dropbox (Personal)/CSU/R/Functions/Traj_Function.R")
-# 
-# # Convert to latlong
-# output.latlong <- AddLatLong(output)
-# 
-# #ele <- filter(output.latlong, ID == "Chuma")
-# ele <- filter(output.latlong, date > as.POSIXct("2018-01-01 00:00:00"))
-# delta.t <- "day"
-# 
-# # get background map
-# register_google("###")
-# background <- ggmap::get_googlemap(center = c(34.412655, -2.358135),
-#                                    zoom = 9,
-#                                    maptype = "satellite")
-# 
-# # animation function
-# animate_paths(paths = ele,
-#               delta.t = delta.t,
-#               coord = c("location.long", "location.lat"),
-#               Time.name = "date",
-#               #covariate = "viterbi", covariate.colors = (c("#E69F00", "#56B4E9", "#009E73")),
-#               ID.name = "ID",
-#               background = background,
-#               method = "mp4")
+library(anipaths)
+source("~/Dropbox (Personal)/CSU/R/Functions/Traj_Function.R")
+
+# Convert to latlong
+output.latlong <- AddLatLong(output)
+
+ele <- filter(output.latlong, name == "Shorty")
+#ele <- filter(output.latlong, date > as.POSIXct("2018-01-01 00:00:00"))
+delta.t <- "day"
+
+# get background map
+# https://console.cloud.google.com/google/maps-apis/overview
+ggmap::register_google(key = "AIzaSyClJFcr4SDm0xmhdp5iuBpVE4Rqvo5vB1k")
+background <- ggmap::get_googlemap(center = c(34.83504, -1.68927),
+                                   zoom = 11,
+                                   maptype = "satellite")
+
+# animation function
+animate_paths(paths = ele,
+              delta.t = delta.t,
+              coord = c("location.long", "location.lat"),
+              Time.name = "date",
+              #covariate = "viterbi", covariate.colors = (c("#E69F00", "#56B4E9", "#009E73")),
+              ID.name = "ID",
+              background = background,
+              method = "mp4")
 
 
 
