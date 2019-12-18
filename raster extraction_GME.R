@@ -90,12 +90,17 @@ summary(used)
 
 ## Extract raster covariates (in parallel) - testing
 # TODO: Adjust rasters to exact extents to make a stack
+<<<<<<< HEAD
 # - dist2forest
 # - slope
 # - gHM (will need to use crop/extend)
 
 
 # s <- stack(dist2ag, dist2water, pa, lc)
+=======
+
+# s <- stack(dist2ag, dist2water)
+>>>>>>> 0f625d2616122709ec8d454d814142854102864c
 # locs2 <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df, 
 #                                 proj4string = crs(study.area))
 # # Extract
@@ -105,6 +110,10 @@ summary(used)
 # endCluster()
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 0f625d2616122709ec8d454d814142854102864c
 ####Add to Tracking DF####
 
 # create data frame
