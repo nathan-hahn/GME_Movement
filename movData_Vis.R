@@ -4,7 +4,11 @@ library(lubridate)
 library(sf)
 library(sp)
 library(mapview)
+library(ggmap)
 library(anipaths)
+
+#TODO: Paralelize trajectory building with foreach %dopar%
+#TODO: Animate paths. Issue with google API key
 
 # load dataset as output from HMM.
 # viterbi is the state: 1 - encamped, 2 - foraging, 3 - exploratory
@@ -46,9 +50,9 @@ mapview(ele.sf, cex = 0.1, alpha = 0, legend = TRUE) + # for legend, make points
   mapview(ele.sldf, color = "grey", cex = 0.5) +
   mapview(ele.sf, color = "black", cex = 0.5)
 
+
 ## Path animation
-library(anipaths)
-source("~/Dropbox (Personal)/CSU/R/Functions/Traj_Function.R")
+source("C:/Users/nhahn/Dropbox (Personal)/CSU/R/Functions/Traj_Function.R")
 
 # Convert to latlong
 output.latlong <- AddLatLong(output)
@@ -59,7 +63,7 @@ delta.t <- "day"
 
 # get background map
 # https://console.cloud.google.com/google/maps-apis/overview
-ggmap::register_google(key = "AIzaSyClJFcr4SDm0xmhdp5iuBpVE4Rqvo5vB1k")
+ggmap::register_google(key = "AIzaSyAyZnyz0E5teo9SbaKvyvoxkV1sAz-ty10", write = TRUE)
 background <- ggmap::get_googlemap(center = c(34.83504, -1.68927),
                                    zoom = 11,
                                    maptype = "satellite")
@@ -70,7 +74,7 @@ animate_paths(paths = ele,
               coord = c("location.long", "location.lat"),
               Time.name = "date",
               #covariate = "viterbi", covariate.colors = (c("#E69F00", "#56B4E9", "#009E73")),
-              ID.name = "ID",
+              ID.name = "name",
               background = background,
               method = "mp4")
 
@@ -101,8 +105,8 @@ saveRDS(ele.sf, "EleCollars_211119_locs_2019-11-30.rds")
 # Final output converted to an sf object
 
 # split dataframe and create ID column
-df.split <- split(df, df$ID)
-df.split <- lapply(df.split, function(x) x %>% mutate(state = as.numeric(viterbi), row.id = seq.int(nrow(.))))
+df.split <- split(df, df$name)
+df.split <- lapply(df.split, function(x) x %>% mutate(row.id = seq.int(nrow(.))))
 
 # prep spatial data as a list
 sf.split <- lapply(df.split, st_as_sf, coords = c("x", "y"), crs = 32737)
@@ -126,6 +130,7 @@ for(i in 1:length(df.split)){
   sldf.list[[i]] <- SpatialLinesDataFrame(sl.list[[i]], data = df.split[[i]])
 }
 })
+
 
 traj.sf <- lapply(sldf.list, st_as_sf) # convert to sf 
 names(traj.sf) <- names(df.split)
