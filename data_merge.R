@@ -5,8 +5,8 @@
 
 library(tidyverse)
 
-mep <- readRDS("MEPcollars_001_clean_2019-06-02.rds")
-gr <- readRDS("GRcollars_001_clean_2019-11-21.rds")
+mep <- readRDS("./movdata/MEPcollars_001_clean_2019-06-02.rds")
+gr <- readRDS("./movdata/GRcollars_001_clean_2019-11-21.rds")
 
 metaGR <- read.csv("EleCollars_211119_metadata.csv")
 
@@ -22,6 +22,11 @@ mep <- mep %>%
   mutate(site = "mep") %>%
   rename(date = Fixtime) 
 mep$collar_id <- NULL
+
+# filter out 
+mep <- mep[-which(mep$name%in%c("Tunai","Bettye","Nancy", "Wilbur", 
+                                "Julia", "Ndorre", "Nkoidila", "Santiyan", "Earhart",
+                                "Rudisha", "Naeku", "Olkeri", "ST2010-1441")),]
 
 # merge
 output <- rbind(mep, gr)
