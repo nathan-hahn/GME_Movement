@@ -14,7 +14,16 @@ library(dplyr)
 
 
 ####Calculate Ag occupancy####
-df <- readRDS('./movdata/GMEcollars_001_used_2019-12-18.rds')
+movdat <- readRDS('./movdata/GMEcollars_001_used_2019-12-18.rds')
+
+df <- filter(movdat, site == "gr")
+
+df <- df[-which(df$name%in%c("Tunai","Bettye","Nancy", "Wilbur", 
+                                "Julia", "Ndorre", "Nkoidila", "Santiyan", "Earhart",
+                                "Rudisha", "Naeku", "Olkeri", "ST2010-1441")),]
+
+
+
 
 ####Mean occupancy####
 fixes <- df %>%
@@ -90,7 +99,7 @@ plot(m2, what = "classification",
 # fit model with mean and max occupancy data (2D)
 # produces 9 clusters
 both.df <- cbind(result$max.occupancy, result$mean.occupancy)
-m3 <- Mclust(both.df)
+m3 <- Mclust(both.df, G = 4)
 plot(m3, what = "classification",
      xlab = "max monthly ag occupancy (*100)",
      ylab = "mean monthly ag occupancy *100")
@@ -103,8 +112,13 @@ plot(m2, what = "BIC")
 plot(m3, what = "BIC")
 
 library(knitr)
+ag.class.mean <- as.factor(m1$classification)
 
-result$ag.class.mean <- m1$classification
+ag.class.both <- as.factor(m3$classification)
+#ag.class.both <- factor(ag.class.both,levels(ag.class.both)[c(1,4,2,3)], labels = c(1,2,3,4)) #FOR MEP ONLY
+
+result$ag.class.mean <- ag.class.mean
+result$ag.class.both <- ag.class.both
 
 # Summarize by individual
 clust.result <- result %>%
@@ -124,7 +138,7 @@ clust.summary <- result %>%
 (clust.summary)
 
 clust.df <- result %>%
-  dplyr::select(id, ag.class.mean) %>%
+  dplyr::select(id, ag.class.mean, ag.class.both) %>%
   inner_join(.,df, by = "id") %>%
   dplyr::select(-month) %>%
   as.data.frame()
@@ -143,13 +157,15 @@ saveRDS(clust.df, outfile)}
 {outfile <- paste0("EleCollars_211119_usedClust_", Sys.Date(), ".csv")
 write.csv(clust.df, outfile)}
 
-# cluster results (ag mean)
+# cluster summary (ag mean)
 {outfile <- paste0("clustResult_211119_", Sys.Date(), ".csv")
 write.csv(clust.result, outfile)}
 
 {outfile <- paste0("clustSummary_211119_", Sys.Date(), ".csv")
 write.csv(clust.summary, outfile)}
 
-
+# cluster results
+{outfile <- paste0("./GMM/clustResult_gr_", Sys.Date(), ".csv")
+  write.csv(clust.result, outfile)}
 
 
