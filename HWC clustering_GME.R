@@ -108,14 +108,11 @@ plot(m1, what = "BIC")
 plot(m2, what = "BIC")
 plot(m3, what = "BIC")
 
-library(knitr)
+# add classification to results
 ag.class.mean <- as.factor(m1$classification)
-
 ag.class.both <- as.factor(m3$classification)
 ag.class.both <- factor(ag.class.both, levels(ag.class.both)[c(1,2,4,3)], labels = c(1,2,3,4)) # FOR GME ONLY
 #ag.class.both <- factor(ag.class.both,levels(ag.class.both)[c(1,4,2,3)], labels = c(1,2,3,4)) #FOR MEP ONLY
-
-
 
 result$ag.class.mean <- ag.class.mean
 result$ag.class.both <- ag.class.both
@@ -128,7 +125,7 @@ clust.result <- result %>%
 
 # Summarize by class
 clust.summary <- result %>%
-  group_by(ag.class.mean) %>%
+  group_by(ag.class.both) %>%
   summarise(n = length(ag.class.mean),
             mean = mean(mean.occupancy),
             sd = sd(mean.occupancy),
@@ -138,36 +135,36 @@ clust.summary <- result %>%
 (clust.summary)
 
 clust.df <- result %>%
-  dplyr::select(id, ag.class.mean, ag.class.both) %>%
-  inner_join(.,df, by = "id") %>%
+  dplyr::select(name, ag.class.mean, ag.class.both) %>%
+  inner_join(.,df, by = "name") %>%
   dplyr::select(-month) %>%
   as.data.frame()
 clust.df$merge_id <- NULL
 
 
-ggplot(clust.summary) + geom_bar(aes(x = ag.class.mean, y = mean), stat = "identity") + 
-  geom_errorbar(aes(x = ag.class.mean, ymin = lower, ymax = upper), width = .2) + ylab("mean ag occupancy*100") + xlab("ag usage cluster")
+ggplot(clust.summary) + geom_bar(aes(x = ag.class.both, y = mean), stat = "identity") + 
+  geom_errorbar(aes(x = ag.class.both, ymin = lower, ymax = upper), width = .2) + ylab("mean ag occupancy*100") + xlab("ag usage cluster")
 
 
 ####Export####
-# new used df with cluster classification
-{outfile <- paste0("EleCollars_211119_usedClust_", Sys.Date(), ".rds")
+# new used df with cluster classification. 
+# has ag.class.mean and ag.class.both classifications included
+{outfile <- paste0("GMEcollars_001_usedClust_", Sys.Date(), ".rds")
 saveRDS(clust.df, outfile)}
 
-{outfile <- paste0("EleCollars_211119_usedClust_", Sys.Date(), ".csv")
+{outfile <- paste0("GMEcollars_001_usedClust_", Sys.Date(), ".csv")
 write.csv(clust.df, outfile)}
 
-# cluster summary (ag mean)
-{outfile <- paste0("clustResult_211119_", Sys.Date(), ".csv")
-write.csv(clust.result, outfile)}
-
-{outfile <- paste0("clustSummary_211119_", Sys.Date(), ".csv")
-write.csv(clust.summary, outfile)}
-
 # cluster results
-{outfile <- paste0("./GMM/clustResult_gr_", Sys.Date(), ".csv")
+{outfile <- paste0("./GMM/clustResult_GME_", Sys.Date(), ".csv")
   write.csv(clust.result, outfile)}
 
+# cluster summary (mean or both)
+{outfile <- paste0("GMEcollars_001_clustSummary_", Sys.Date(), ".csv")
+  write.csv(clust.result, outfile)}
+
+{outfile <- paste0("GMEcollars_001_clustSummary_", Sys.Date(), ".csv")
+  write.csv(clust.summary, outfile)}
 
 
 
