@@ -17,32 +17,37 @@ Sys.setenv(TZ="Africa/Nairobi")
 #TODO: Analyse HEC data to justify window size for rolling averages
 
 ## Load data - used points plus cluster classification (2019)
-df <- readRDS('GMEcollars_001_used_2019-12-18.rds')
-colnames(df)[colnames(df)=="Name"] <- "name"
-colnames(df)[colnames(df)=="date"] <- "Fixtime"
+df <- readRDS('./movdata/GMEcollars_001_usedClust_2020-01-14.rds')
 
 df$ag.used <- ifelse(df$lc.estes == 1, 1, 0)
-df$year <- year(df$Fixtime)
+df$year <- year(df$date)
 df <- droplevels(df)
 
 ## hist of dist2ag is interesting by individual. A lot of individuals in class 1 and 2 have bimodal distributions
 ## Not plotted
 
-# p <- lapply(split(df, df$name),
-#             function(x)
-#               plot(cumsum(x$ag.used), main = x$name[1]))
+lapply(split(df, df$name),
+          function(x)
+            plot(hist(x$dist2ag), main = x$name[1]))
 
 
 ## Cumulative Sum Graphs
-csum <- lapply(split(df, df$id),
-               function(x) cumsum(x$ag.used))
+# calculate csum by name (accounts for multiple collars on same individual)
+cum_sum <- function(x){
+  csum = cumsum(x$ag.used)
+  x$csum = unlist(csum, use.names = FALSE)
+  return(x)
+}
 
-df$csum <- unlist(csum, use.names = FALSE)
+csum <- lapply(split(df, df$name),
+               cum_sum)
+
+df <- do.call(rbind, csum)
 
 # filter to 2017-2018 and to select eles
-df.2018 <- droplevels(subset(df, year <= 2018))
+df.2018 <- droplevels(subset(df, year == 2018))
 # sample 3 individuals from each group for data clarity. Code for plotting all eles is below
-sample <- c("Bonchugu", "Ukungu", "Mokomre", "Ukwaju", "Lowana", "Kimbizwa")
+sample <- c("Alina", "Hangzhou", "Fred", "Kegol", "Olchoda", "Heritage")
 df.sample <- droplevels(subset(df.2018, df.2018$name %in% sample))
 
 #TODO: Automate re-ordering of name factor level based on ag.class.mean
@@ -56,20 +61,22 @@ pal2 <- colorRampPalette(c("blue", "green"))(2) #n
 pal3 <- colorRampPalette(c("orange", "red"))(2) #n
 
 # ggplot version
-ggplot(df.sample, aes(x = Fixtime, y = csum, color = interaction(as.factor(ag.class.mean), as.factor(name)))) + geom_line() +
+ggplot(df.sample, aes(x = date, y = csum, color = interaction(as.factor(ag.class.mean), as.factor(name)))) + geom_line() +
   scale_colour_manual(values = c(pal1,pal2,pal3)) +
   labs(x = "Time", y = "cummulative ag usage", title = "Temporal Agriculture Usage - 2018", color = "agClass.Individual")
 
 ## Plotting of cumulative ag usage for all elephants
 # plot all eles cum ag usage across time. See some eles stand out, but different ones start and stop at different times.
-ggplot(df, aes(x = Fixtime, y = csum)) + geom_line(aes(colour = name))
+ggplot(df, aes(x = date, y = csum)) + geom_line(aes(colour = name))
 
-# filter to first set of collar deployments (2017)
-t <- droplevels(subset(df, Fixtime < "2018-08-01 00:00:00"))
+
+## filter to first set of grumeti collar deployments (2017)
+t <- droplevels(subset(df, date < "2018-08-01 00:00:00"))
 t <- unique(t$id)
 
 df.2018 <- droplevels(subset(df, id %in% t))
-csum <- lapply(split(df.2018, df.2018$id),
+df.2018 <- droplevels(subset(df, date > '2018-08-01 00:00:00'))
+csum <- lapply(split(df.2018, df.2018$name),
                function(x) cumsum(x$ag.used))
 df.2018$csum <- unlist(csum, use.names = FALSE)
 
@@ -87,8 +94,8 @@ pal1 <- colorRampPalette(c("grey", "black"))(5) #n
 pal2 <- colorRampPalette(c("blue", "green"))(5) #n
 pal3 <- colorRampPalette(c("orange", "red"))(1) #n
 
-p1 <- ggplot(df.2018, aes(x = Fixtime, y = csum, color = interaction(as.factor(ag.class.mean), as.factor(name)))) + geom_line() +
-  scale_colour_manual(values = c(pal1,pal2,pal3)) +
+p1 <- ggplot(df.2018, aes(x = date, y = csum, color = interaction(as.factor(ag.class.mean), as.factor(name)))) + geom_line() +
+  #scale_colour_manual(values = c(pal1,pal2,pal3)) +
   labs(x = "Time", y = "cummulative ag usage", title = "Cummulative ag usage Grumeti: first collar deployments", color = "agClass.Individual")
 
 p1
@@ -97,12 +104,12 @@ p1
 # by day
 
 fixes.d <- df %>%
-  mutate(day = date(Fixtime)) %>% # simplify to date for grouping
+  mutate(day = date(date)) %>% # simplify to date for grouping
   group_by(name, day) %>%
   tally()
 
 ag.day <- df %>%
-  mutate(day = date(Fixtime)) %>% # simplify to date for grouping
+  mutate(day = date(date)) %>% # simplify to date for grouping
   group_by(name, ag.class.mean, day) %>%
   tally(lc.estes == 1) %>% # tally fixes in ag
   droplevels() %>%
@@ -149,21 +156,21 @@ window <- 90*24*2 # set number of days and convert to 30 minute fixes
 split <- split(df, df$name) # careful of what you split by. May cuase problems splitting by name if there are large gaps between recollars. Let na.rm = FALSE in rollstat
 
 system.time({
-ts <- lapply(split, as.ts, start = split$Fixtime[1], frequency = 1) # frequency set with 30min fixes
+ts <- lapply(split, as.ts, start = split$date[1], frequency = 1) # frequency set with 30min fixes
 tx <- lapply(ts, as.xts)
 res <- lapply(seq_along(tx), function(i) rollapply(tx[[i]]$ag.used, width = window, align = "center", by.column = FALSE,
               FUN = rollstat, na.rm = FALSE))
 merge <- lapply(seq_along(res), function(i) cbind(split[[i]], as.data.frame(res[[i]])))
 })
 
-plot(merge[[28]]$Fixtime, merge[[28]]$mean) #check
+plot(merge[[28]]$date, merge[[28]]$mean) #check
 
 # unlist 
 res.90 <- do.call(rbind, merge)
 
 # plot
 res.90$ag.used <- ifelse(res.90$ag.used == 1, 0.75, NA) # adjust ag.used values for plotting for visibility
-p90 <- ggplot(res.90, aes(x = Fixtime, color = name)) + #, color = name
+p90 <- ggplot(res.90, aes(x = date, color = name)) + #, color = name
   geom_point(aes(y = ag.used), color = "grey40", size = .2, alpha = 0.5) +
   #geom_ribbon(aes(ymin = lo.95, ymax = hi.95), size = .5, alpha = 0.4) +
   geom_line(aes(y = mean), size = 1, alpha = 0.7) +
