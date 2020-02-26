@@ -17,7 +17,8 @@ Sys.setenv(TZ="Africa/Nairobi")
 #TODO: Analyse HEC data to justify window size for rolling averages
 
 ## Load data - used points plus cluster classification (2019)
-df <- readRDS('./movdata/GMEcollars_001_usedClust_2020-01-14.rds')
+#df <- readRDS('./movdata/GMEcollars_001_usedClust_2020-01-14.rds')
+df <- readRDS("./movdata/MEPcollars_20181231_usedClust.rds")
 
 df$ag.used <- ifelse(df$lc.estes == 1, 1, 0)
 df$year <- year(df$date)
@@ -26,9 +27,9 @@ df <- droplevels(df)
 ## hist of dist2ag is interesting by individual. A lot of individuals in class 1 and 2 have bimodal distributions
 ## Not plotted
 
-lapply(split(df, df$name),
-          function(x)
-            plot(hist(x$dist2ag), main = x$name[1]))
+# lapply(split(df, df$name),
+#           function(x)
+#             plot(hist(x$dist2ag, breaks = 100), main = x$name[1]))
 
 
 ## Cumulative Sum Graphs
@@ -46,28 +47,35 @@ df <- do.call(rbind, csum)
 
 # filter to 2017-2018 and to select eles
 df.2018 <- droplevels(subset(df, year == 2018))
+
+csum <- lapply(split(df.2018, df.2018$name),
+               cum_sum)
+
+df.2018 <- do.call(rbind, csum)
+
 # sample 3 individuals from each group for data clarity. Code for plotting all eles is below
-sample <- c("Alina", "Hangzhou", "Fred", "Kegol", "Olchoda", "Heritage")
+sample <- c("Alina", "Hangzhou", "Hugo","Kegol", "Ivy", "Shorty", "Olchoda")
 df.sample <- droplevels(subset(df.2018, df.2018$name %in% sample))
 
 #TODO: Automate re-ordering of name factor level based on ag.class.mean
 df.sample$name <- as.factor(df.sample$name)
-df.sample$ag.class.mean <- as.factor(df.sample$ag.class.mean)
+df.sample$ag.class.both <- as.factor(df.sample$ag.class.both)
 df.sample$name <- factor(df.sample$name, levels = sample)
 
 # create color palettes for each ag class
 pal1 <- colorRampPalette(c("grey", "black"))(2) #n
-pal2 <- colorRampPalette(c("blue", "green"))(2) #n
-pal3 <- colorRampPalette(c("orange", "red"))(2) #n
+pal2 <- colorRampPalette(c("blue", "purple"))(2) #n
+pal3 <- colorRampPalette(c("orange", "green"))(2) #n
+pal4 <- colorRampPalette(c("red"))(1) #n
 
 # ggplot version
-ggplot(df.sample, aes(x = date, y = csum, color = interaction(as.factor(ag.class.mean), as.factor(name)))) + geom_line() +
-  scale_colour_manual(values = c(pal1,pal2,pal3)) +
+ggplot(df.sample, aes(x = date, y = csum, color = interaction(as.factor(ag.class.both), as.factor(name)))) + geom_line() +
+  scale_colour_manual(values = c(pal1,pal2,pal3, pal4)) +
   labs(x = "Time", y = "cummulative ag usage", title = "Temporal Agriculture Usage - 2018", color = "agClass.Individual")
 
 ## Plotting of cumulative ag usage for all elephants
 # plot all eles cum ag usage across time. See some eles stand out, but different ones start and stop at different times.
-ggplot(df, aes(x = date, y = csum)) + geom_line(aes(colour = name))
+# ggplot(df, aes(x = date, y = csum)) + geom_line(aes(colour = name))
 
 
 ## filter to first set of grumeti collar deployments (2017)
