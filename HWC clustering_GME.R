@@ -22,6 +22,8 @@ movdat <- movdat[-which(movdat$name%in%c("Nyanza")),]
 
 # dataframe for fitting
 df <- movdat
+# df <- movdat %>%
+#   filter(site == "mep")
 
 ####Mean occupancy####
 fixes <- df %>%
@@ -165,6 +167,7 @@ write.csv(clust.df, outfile)}
 
 {outfile <- paste0("GMEcollars_001_clustSummary_", Sys.Date(), ".csv")
   write.csv(clust.summary, outfile)}
+
 
 
 
