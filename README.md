@@ -5,7 +5,8 @@ Movement analysis for Mara/Grumeti data
 1. Data Merge
 Takes cleaned tracking datasets and merges into a single dataframe
 NOTE: Grumeti data is a 30-min intervals!!
-#TODO: Add a summary table output with Name, ID, Sex, Age, Days Tracked
+#TODO: Add the grumeti metadata in the GR cleaner code
+#TODO: Add region names to collar metadata - should be possible with DAS
 
 2. Raster Extraction
 Raster extraction for the full dataset. Limited to ecosystem-wide layers. 
