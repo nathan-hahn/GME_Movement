@@ -33,15 +33,13 @@ study.area <- '+proj=utm +init=epsg:32737'
 # get rasters from spatial data folder and set CRS
 dist2ag <- raster("./spatial data/dist2ag_estes_32736_2019-11-21.tif")
 dist2water <- raster("./spatial data/dist2water_estes_32736_2019-11-21.tif")
-slope <- raster("./spatial data/slope_estes_32736_2019-11-21.tif")
-slope <- resample(slope, dist2ag, method = "ngb")
+slope <- raster("./spatial data/slope_estes_32736_2020-05-12.tif")
 lc <- raster("./spatial data/change03_181_reclassMara_2019-11-22.tif")
-gHM <- raster("./spatial data/gHM_estes_32736_2019-11-21.tif")
-gHM <- resample(gHM, dist2ag, method = "ngb")
+gHM <- raster("./spatial data/gHM_estes_32736_2020-05-12.tif")
 pa <- raster("./spatial data/GSEr_estes_32736_2019-11-21.tif") # protection status
 pa[!is.finite(pa)] = 1 # set no data to 'not protected' (1)
 
-# downsampled sentinel classification to 30 meters to keep consistent with other proximity layers
+# downsampled sentinel classification to 30 meters to keep consistent with other proximity layers. extent different
 dist2forest <- raster("./spatial data/dist2forest_tiedmen_sentinelpts_32736_30.tif") 
 
 # plot and check raster distributions
@@ -50,17 +48,17 @@ rasters <- list(slope=slope, dist2ag=dist2ag,
 
 s <- stack(dist2ag, dist2water, slope, pa, lc)
 
-# # rasters
-# par(mfrow = c(3,2))
-# for (i in 1:length(rasters)){
-#  plot(rasters[[i]], main = names(rasters[[i]]))
-# }
-# 
-# # histograms
-# par(mfrow = c(3,2))
-# for (i in 1:length(rasters)) {
-#  hist(rasters[[i]], breaks = 100, main = names(rasters[[i]]))
-# }
+# rasters
+par(mfrow = c(3,2))
+for (i in 1:length(rasters)){
+ plot(rasters[[i]], main = names(rasters[[i]]))
+}
+
+# histograms
+par(mfrow = c(3,2))
+for (i in 1:length(rasters)) {
+ hist(rasters[[i]], breaks = 100, main = names(rasters[[i]]))
+}
 
 ## Extract raster covariates
 
