@@ -32,6 +32,33 @@ used.st <- used.all %>%
 used.st <- as.data.frame(used.st)
 saveRDS(used.st, "./movdata/GMEcollars_001_usedClustST_2020-05-14.rds")
 
+
+#' ---- Create Test/Train Sets ----
+#' Split the data into testing and training sets
+#' Last n% of each burst for the testing, defined by 'cut'
+
+split <- split(used.st, used.st$ID)
+split <- c(split[1], split[3]) #TEMP -- only use Caroline and Kegol
+
+f <- function(x, cut, type) {
+  n <- nrow(x)*cut
+  
+  if (type == "train") {
+    y <- head(x, (nrow(x)-n))
+  }
+  
+  if (type == "test")
+    y <- tail(x, n)
+  
+  return(y)
+}
+
+cut = .10
+train <- lapply(split, f, cut = cut, type = "train")
+train <- do.call("rbind", train)
+test <- lapply(split, f, cut = cut, type = "test")
+test <- do.call("rbind", test)
+
 #' ---- create momentu objects ----
 #' Apply the velocity function by group. Create list by burst, apply function to each data.frame, and then unlist.
 #' Faster way to do this without losing momentuHMM object? 
@@ -39,11 +66,11 @@ saveRDS(used.st, "./movdata/GMEcollars_001_usedClustST_2020-05-14.rds")
 # Create objects for the MomentuHMM package: step, log step, velocity, log velocity 
 library(momentuHMM)
 
-ele.step <- prepData(data = used.st, coordNames = c("x", "y"))
+ele.step <- prepData(data = train, coordNames = c("x", "y"))
 ele.log.step <- ele.step
 ele.log.step$step <- log(ele.log.step$step + 0.001) # add constant for zero steps
 
 # save as rdata for us on secondary machines
-saveRDS(ele.log.step, "ele_logStep_mmt.rds")
+saveRDS(ele.log.step, ".HMM/eleTrain_logStep_mmt_TEST.rds")
 
 
