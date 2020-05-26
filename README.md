@@ -25,3 +25,7 @@ Applies smoothing function over data for rolling average of ag use (full or sing
 5. HMM
 #TODO: Create HMM code to run on the full dataset
 #TODO: Run HMM on Grumeti only at 30-min intervals 
+#TODY: Add filter code to HMM_prepData_pop_GME.R
+df <- filter(df, fixType != "irregular") %>%
+  filter(burst %in% hmm.filter$burst) %>%
+  droplevels()
