@@ -7,8 +7,8 @@ gme <- readRDS("./movdata/GMEcollars_002_clean_2020-05-21.rds")
 
 # prep spdf
 t <-  filter(gme, !is.na(x)) %>%
-  dplyr::select(x, y, subject_name)
-  #filter(subject_name %in% c("Lowana", "Fred", "Olchoda")) 
+  dplyr::select(x, y, subject_name) %>%
+  filter(subject_name %in% c("Lowana", "Fred", "Olchoda")) 
 coordinates(t) <-~x+y
 
 # build MCP's by subject_name
@@ -34,8 +34,10 @@ system.time(mcp.rast <- lapply(mcp, mask.poly.raster, raster = s$change03_181_re
 
 # landscape metrics
 library(landscapemetrics)
+library(landscapetools)
 
+metrics <- lsm_l_ed(mcp.rast$Olchoda)
 
-
+metrics <- lapply(mcp.rast, lsm_l_ed)
 
 
