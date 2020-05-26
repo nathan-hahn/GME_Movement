@@ -7,8 +7,8 @@ gme <- readRDS("./movdata/GMEcollars_002_clean_2020-05-21.rds")
 
 # prep spdf
 t <-  filter(gme, !is.na(x)) %>%
-  dplyr::select(x, y, subject_name) 
-  #filter(subject_name == c("Ivy", "Fred")) 
+  dplyr::select(x, y, subject_name) %>%
+  filter(subject_name == c("Ivy", "Fred")) 
 coordinates(t) <-~x+y
 
 # build MCP's 
@@ -33,14 +33,20 @@ lr <- mask(x=cr, mask=fr)
 
 
 
-clip.poly.raster <- function(raster, poly) {
+mask.poly.raster <- function(poly, raster) {
+  # crop raster to polygon extent
   cr <- crop(raster, extent(poly), snap = "out")
+  # # rasterize the polygon for masking
   fr <- rasterize(poly, cr)
+  # # mask the 
   lr <- mask(x = cr, mask = fr)
   return(lr)
 }
 
-system.time(mcp.rast <- lapply(mcp, clip.poly.raster, raster = s))
+
+system.time(mcp.rast <- lapply(mcp, mask.poly.raster, raster = s$change03_181_reclassMara_2019.11.22))
+
+
 
 
 # landscape metrics
