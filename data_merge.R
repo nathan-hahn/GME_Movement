@@ -7,31 +7,40 @@ library(tidyverse)
 
 
 ##### LOAD DATA #####
-mep <- readRDS("./movdata/MEPcollars_001_clean_2019-06-02.rds")
-gr <- readRDS("./movdata/GRcollars_001_clean_2019-11-21.rds")
-metaGR <- read.csv("./movdata/EleCollars_211119_metadata.csv")
+mep <- readRDS("./movdata/MEPcollars_20200516_clean_2020-05-21.rds")
+metaMEP <- read.csv("./movdata/MEPcollars_20200516_metadata.csv")
+metaMEP$X <- NULL
+gr <- readRDS("./movdata/GRcollars_20191231_clean_2020-05-21.rds")
+metaGR <- read.csv("./movdata/GRCollars_211119_metadata.csv")
 
 
 ##### MERGE #####
 # prep datasets
-gr <- gr %>%
-  inner_join(., metaGR, by = "id") %>%
-  mutate(collar_type = "Henrik GL200", fixType = "regular", site = "gr") %>%
-  rename(name = Name, sex = Sex)
-gr$ele.xy.TEMPERATURE <- NULL
-
 mep <- mep %>%
+  mutate(ele.xy.TEMPERATURE = NA) %>%
+  inner_join(., metaMEP, by = "id") %>%
   mutate(site = "mep") %>%
   rename(date = Fixtime) 
-mep$collar_id <- NULL
+mep$n <- NULL
+mep.col.names <- colnames(mep)
+
+
+gr <- gr %>%
+  left_join(., metaGR, by = "id") %>%
+  rename(subject_name = Name, subject_sex = Sex) %>%
+  mutate(collar_id = id, 
+    id = paste(subject_name, substr(collar_id, nchar(collar_id)-3, nchar(collar_id)), sep = "-"), 
+    region = "Serengeti", fixType = "regular", site = "gr") %>%
+  mutate(subject_sex  = ifelse(subject_sex == "F", "female", "male")) %>%
+  dplyr::select(mep.col.names)
+
 
 # filter out 
-# mep <- mep[-which(mep$name%in%c("Tunai","Bettye","Nancy", "Wilbur", 
-#                                 "Julia", "Ndorre", "Nkoidila", "Santiyan", "Earhart",
-#                                 "Rudisha", "Naeku", "Olkeri", "ST2010-1441")),]
+# mep <- filter(mep, region )
 
 # merge
-output <- rbind(mep, gr)
+output <- bind_rows(mep, gr) %>%
+  filter(year(date) < 2020)
 
 
 ##### Tracking Summary #####
@@ -40,7 +49,7 @@ GME_summary <- function(data) {
   require(dplyr)
   require(lubridate)
   
-  # 1. get summary stats by chronofile
+  # 1. get summary stats by id
   sum <- data %>%
     group_by(id, name, sex, site, fixType) %>%
     summarise(dataStart = min(date),
@@ -68,12 +77,12 @@ tracking.summary <- GME_summary(data = output)
 
 
 ##### SAVE #####
-outfile <- paste0("./movdata/GMEcollars_001_clean.csv" )
+outfile <- paste0("./movdata/GMEcollars_002_clean_", Sys.Date(), ".rds" )
+#write.csv(output, outfile)
 saveRDS(output, outfile)
-write.csv(output, outfile)
 
-outfile <- paste0("./movdata/GMEsummary_001.csv" )
-write.csv(tracking.summary, outfile)
+# outfile <- paste0("./movdata/GMEsummary_001.csv" )
+# write.csv(tracking.summary, outfile)
 
 
 
