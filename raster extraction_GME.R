@@ -28,7 +28,7 @@ df <- df[complete.cases(df[,1:2]),]
 
 library(raster)
 # system CRS - for some reason doesn't work if 32736???
-study.area <- '+proj=utm +init=epsg:32737'
+study.area <- '+proj=utm +init=epsg:32736'
 
 # get rasters from spatial data folder and set CRS
 dist2ag <- raster("./spatial data/dist2ag_estes_32736_2019-11-21.tif")
@@ -161,6 +161,9 @@ saveRDS(used.df, outfile)
 
 outfile <- paste0("./movdata/GMEcollars_001_used_", Sys.Date(), ".csv")
 write.csv(used.df, outfile)
+
+# write raster stack
+saveRDS(s, "./spatial data/GME_rasterStack_20200522.rds")
 
 ########################################################################################################
 ########################################################################################################
