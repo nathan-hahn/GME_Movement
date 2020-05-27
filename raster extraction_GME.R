@@ -16,7 +16,7 @@ library(raster)
 ####Prep data####
 
 # load RData
-df <- readRDS("./movdata/GMEcollars_001_clean_2019-12-13.rds")
+df <- readRDS("./movdata/GMEcollars_002_clean_2020-05-21.rds")
 
 # summarize relocs by individual  
 df %>%
@@ -43,8 +43,9 @@ pa[!is.finite(pa)] = 1 # set no data to 'not protected' (1)
 dist2forest <- raster("./spatial data/dist2forest_tiedmen_sentinelpts_32736_30.tif") 
 
 # plot and check raster distributions
-rasters <- list(slope=slope, dist2ag=dist2ag,
+rasters <- list(slope=slope, dist2ag=dist2ag, dist2forest = dist2forest,
                dist2water=dist2water, gHM = gHM, protection = pa, landcover = lc)
+
 
 s <- stack(dist2ag, dist2water, slope, pa, lc)
 
@@ -75,8 +76,8 @@ used[,3] <- extract(dist2water, locs)
 used[,4] <- extract(slope, locs)
 used[,5] <- extract(gHM, locs)
 used[,6] <- extract(pa, locs)
-used[,7] <- extract(dist2forest, locs)
-used[,8] <- extract(lc, locs)
+used[,7] <- extract(lc, locs)
+used[,8] <- extract(dist2forest, locs)
 
 # mean NDVI?
 })
@@ -87,20 +88,17 @@ summary(used)
 
 
 ## Extract raster covariates (in parallel) - testing
-# TODO: Adjust rasters to exact extents to make a stack
-# - dist2forest
-# - slope
-# - gHM (will need to use crop/extend)
+library(snow)
 
-
-# s <- stack(dist2ag, dist2water, pa, lc)
-# locs2 <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df, 
-#                                 proj4string = crs(study.area))
-# # Extract
-# nCores <- parallel:detectCores() - 1
-# beginCluster(n = 7)
-# used2 <- extract(s, locs2)
-# endCluster()
+locs2 <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df,
+                                proj4string = crs(study.area))
+# Extract
+nCores <- detectCores() - 1
+beginCluster(n = nCores)
+system.time(
+  used2 <- extract(s, locs2)
+)
+endCluster()
 
 
 ####Add to Tracking DF####
