@@ -14,24 +14,36 @@ library(dplyr)
 
 
 ####Calculate Ag occupancy####
-movdat <- readRDS('./movdata/GMEcollars_001_used_2019-12-18.rds')
-movdat <- movdat[-which(movdat$name%in%c("Tunai","Bettye","Nancy", "Wilbur", 
+movdat <- readRDS('./movdata/GMEcollars_002_used_2020-06-02.rds')
+# mep adjustments
+movdat <- movdat[-which(movdat$subject_name%in%c("Tunai","Bettye","Nancy", "Wilbur", 
                              "Julia", "Ndorre", "Nkoidila", "Santiyan", "Earhart",
                              "Rudisha", "Naeku", "Olkeri", "ST2010-1441")),]
-movdat <- movdat[-which(movdat$name%in%c("Nyanza")),]
+# grumeti adjustments
+movdat <- movdat[-which(movdat$subject_name%in%c("Nyanza")),]
+movdat$subject_name <- ifelse(is.na(movdat$subject_name), movdat$collar_id, movdat$subject_name)
+movdat2 <-subset(movdat, minute(movdat$date) <= 10 | minute(movdat$date) >= 50)
 
 # dataframe for fitting
-df <- movdat
+df <- movdat2 
+names(df)[names(df) == 'dist2forest'] <- 'lc.estes2'
+names(df)[names(df) == 'lc.estes'] <- 'dist2forest'
+names(df)[names(df) == 'lc.estes2'] <- 'lc.estes'
+
+
+
+
+
 # df <- movdat %>%
 #   filter(site == "mep")
 
 ####Mean occupancy####
 fixes <- df %>%
-  group_by(name) %>%
+  group_by(subject_name) %>%
   tally()
 
 ag.mean <- df %>%
-  group_by(name) %>%
+  group_by(subject_name) %>%
   tally(lc.estes == 1) %>%
   droplevels() %>%
   ungroup() %>%
@@ -47,18 +59,18 @@ ag.mean <- df %>%
 
 df$month <- format(df$date, "%m")
 fixes.m <- df %>%
-  group_by(site, name, month) %>%
+  group_by(site, subject_name, month) %>%
   tally() 
 
 ag.month <- df %>%
-  group_by(site, name, month) %>%
+  group_by(site, subject_name, month) %>%
   tally(lc.estes == 1) %>% # tally fixes in ag
   droplevels() %>%
   ungroup() %>%
   rename(n.ag = n) %>%
   mutate(month = as.factor(month)) %>%
   mutate(n = fixes.m$n) %>%
-  arrange(name, month) %>%
+  arrange(subject_name, month) %>%
   mutate(month.occupancy = n.ag/n)
 
 (ag.month) # the month for each individual where ag occupancy is highest (across all)
@@ -71,14 +83,15 @@ p
 # filter to each individuals max monthly ag occupancy 
 result <- ag.month %>%
   #filter(site == "mep") %>% ## filter by site if needed! 
-  group_by(name) %>%
+  group_by(subject_name) %>%
   slice(which.max(month.occupancy)) %>%
   ungroup() %>%
   mutate(
     max.occupancy = round(month.occupancy, 5), 
     mean.occupancy = round(ag.mean$mean.ag/100, 5), 
     month = as.numeric(month))
-
+result$month.occupancy <- NULL
+(result)
 ####Model Fitting####
 
 # fit model with mean ag occupancy
@@ -97,11 +110,11 @@ plot(m2, what = "classification",
 
 # fit model with mean and max occupancy data (2D)
 # produces 9 clusters
-both.df <- cbind(result$mean.occupancy, result$max.occupancy)
-m3 <- Mclust(both.df, G = 4)
+both.df <- cbind(result$mean.occupancy*100, result$max.occupancy*100)
+m3 <- Mclust(both.df)
 plot(m3, what = "classification",
-     xlab = "mean ag occupancy (*100)",
-     ylab = "max monthly ag occupancy *100")
+     xlab = "mean ag occupancy",
+     ylab = "max monthly ag occupancy")
 
 ####Results####
 
@@ -113,7 +126,8 @@ plot(m3, what = "BIC")
 # add classification to results
 ag.class.mean <- as.factor(m1$classification)
 ag.class.both <- as.factor(m3$classification)
-ag.class.both <- factor(ag.class.both, levels(ag.class.both)[c(1,2,4,3)], labels = c(1,2,3,4)) # FOR GME ONLY
+ag.class.both <- factor(ag.class.both, levels(ag.class.both)[c(1,4,3,2)], labels = c(1,2,3,4)) # FOR GME 002 ONLY
+#ag.class.both <- factor(ag.class.both, levels(ag.class.both)[c(1,2,4,3)], labels = c(1,2,3,4)) # FOR GME  001 ONLY
 #ag.class.both <- factor(ag.class.both,levels(ag.class.both)[c(1,4,2,3)], labels = c(1,2,3,4)) #FOR MEP ONLY
 
 result$ag.class.mean <- ag.class.mean
@@ -137,24 +151,23 @@ clust.summary <- result %>%
 (clust.summary)
 
 clust.df <- result %>%
-  dplyr::select(name, ag.class.mean, ag.class.both) %>%
-  inner_join(.,df, by = "name") %>%
+  dplyr::select(subject_name, ag.class.both) %>%
+  inner_join(.,df, by = "subject_name") %>%
   dplyr::select(-month) %>%
   as.data.frame()
-clust.df$merge_id <- NULL
 
 
 ggplot(clust.summary) + geom_bar(aes(x = ag.class.both, y = mean), stat = "identity") + 
-  geom_errorbar(aes(x = ag.class.both, ymin = lower, ymax = upper), width = .2) + ylab("mean ag occupancy*100") + xlab("ag usage cluster")
+  geom_errorbar(aes(x = ag.class.both, ymin = lower, ymax = upper), width = .2) + ylab("mean ag occupancy") + xlab("ag usage cluster")
 
 
 ####Export####
 # new used df with cluster classification. 
 # has ag.class.mean and ag.class.both classifications included
-{outfile <- paste0("GMEcollars_001_usedClust_", Sys.Date(), ".rds")
+{outfile <- paste0("GMEcollars_002_usedClust_", Sys.Date(), ".rds")
 saveRDS(clust.df, outfile)}
 
-{outfile <- paste0("GMEcollars_001_usedClust_", Sys.Date(), ".csv")
+{outfile <- paste0("GMEcollars_002_usedClust_", Sys.Date(), ".csv")
 write.csv(clust.df, outfile)}
 
 # cluster results
@@ -162,10 +175,10 @@ write.csv(clust.df, outfile)}
   write.csv(clust.result, outfile)}
 
 # cluster summary (mean or both)
-{outfile <- paste0("GMEcollars_001_clustSummary_", Sys.Date(), ".csv")
+{outfile <- paste0("GMEcollars_002_clustSummary_", Sys.Date(), ".csv")
   write.csv(clust.result, outfile)}
 
-{outfile <- paste0("GMEcollars_001_clustSummary_", Sys.Date(), ".csv")
+{outfile <- paste0("GMEcollars_002_clustSummary_", Sys.Date(), ".csv")
   write.csv(clust.summary, outfile)}
 
 
