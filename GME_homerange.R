@@ -7,8 +7,8 @@ gme <- readRDS("./movdata/GMEcollars_002_clean_2020-05-21.rds")
 
 # prep spdf
 t <-  filter(gme, !is.na(x)) %>%
-  dplyr::select(x, y, subject_name) %>%
-  filter(subject_name %in% c("Tressa", "Fred", "Olchoda")) 
+  dplyr::select(x, y, subject_name) 
+  #filter(subject_name %in% c("Tressa", "Fred", "Olchoda")) 
 coordinates(t) <-~x+y
 
 # build MCP's by subject_name
@@ -33,13 +33,28 @@ system.time(
 
 saveRDS(mcp.rast, paste0("./homerange/GME_mcp_rasters_002", Sys.Date(),".rds"))
 
+
 # landscape metrics
 library(landscapemetrics)
 library(landscapetools)
 
-metrics <- lsm_l_ed(mcp.rast$Olchoda)
+lsm_l_ed(mcp.rast$Olchoda)
+lsm_l_ed(mcp.rast$Kimbizwa)
 
 metrics <- lapply(mcp.rast, lsm_l_ed)
+names(metrics) <- levels(as.factor(gme$subject_name))
+t <- do.call("rbind", metrics)
+t$subject_name <- levels(as.factor(gme$subject_name))
 
-metrics[[1]]$value
+par(mfrow = c(2,2))
+cuts = c(0,1,2,3,4)
+pal = colorRampPalette(c('white', "yellow", "dark green", "dark grey", "grey"))
+plot(mcp.rast$Alina, main = paste0("Sporadic: Alina, ed=", round(metrics$Alina$value, 2)),
+     col = pal(5))
+plot(mcp.rast$Fred, main = paste0("Mixed Seasonal: Fred, ed=", round(metrics$Fred$value,2)),
+     col = pal(5))
+plot(mcp.rast$Kimbizwa, main = paste0("Seasonal: Kimbizwa, ed=", round(metrics$Kimbizwa$value,2)),
+     col = pal(5))
+plot(mcp.rast$Olchoda, main = paste0("Habitual: Olchoda, ed=", round(metrics$Olchoda$value, 2)),
+     col = pal(5))
 
