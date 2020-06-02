@@ -22,18 +22,10 @@ movdat <- movdat[-which(movdat$subject_name%in%c("Tunai","Bettye","Nancy", "Wilb
 # grumeti adjustments
 movdat <- movdat[-which(movdat$subject_name%in%c("Nyanza")),]
 movdat$subject_name <- ifelse(is.na(movdat$subject_name), movdat$collar_id, movdat$subject_name)
-movdat2 <-subset(movdat, minute(movdat$date) <= 10 | minute(movdat$date) >= 50)
+movdat <-subset(movdat, minute(movdat$date) <= 10 | minute(movdat$date) >= 50)
 
 # dataframe for fitting
-df <- movdat2 
-names(df)[names(df) == 'dist2forest'] <- 'lc.estes2'
-names(df)[names(df) == 'lc.estes'] <- 'dist2forest'
-names(df)[names(df) == 'lc.estes2'] <- 'lc.estes'
-
-
-
-
-
+df <- movdat
 # df <- movdat %>%
 #   filter(site == "mep")
 
@@ -164,10 +156,10 @@ ggplot(clust.summary) + geom_bar(aes(x = ag.class.both, y = mean), stat = "ident
 ####Export####
 # new used df with cluster classification. 
 # has ag.class.mean and ag.class.both classifications included
-{outfile <- paste0("GMEcollars_002_usedClust_", Sys.Date(), ".rds")
+{outfile <- paste0("./GMM/GMEcollars_002_usedClust_", Sys.Date(), ".rds")
 saveRDS(clust.df, outfile)}
 
-{outfile <- paste0("GMEcollars_002_usedClust_", Sys.Date(), ".csv")
+{outfile <- paste0("./GMM/GMEcollars_002_usedClust_", Sys.Date(), ".csv")
 write.csv(clust.df, outfile)}
 
 # cluster results
@@ -175,10 +167,10 @@ write.csv(clust.df, outfile)}
   write.csv(clust.result, outfile)}
 
 # cluster summary (mean or both)
-{outfile <- paste0("GMEcollars_002_clustSummary_", Sys.Date(), ".csv")
+{outfile <- paste0("./GMM/GMEcollars_002_clustSummary_", Sys.Date(), ".csv")
   write.csv(clust.result, outfile)}
 
-{outfile <- paste0("GMEcollars_002_clustSummary_", Sys.Date(), ".csv")
+{outfile <- paste0("./GMM/GMEcollars_002_clustSummary_", Sys.Date(), ".csv")
   write.csv(clust.summary, outfile)}
 
 

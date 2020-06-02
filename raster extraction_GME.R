@@ -49,17 +49,17 @@ rasters <- list(slope=slope, dist2ag=dist2ag, dist2forest = dist2forest,
 
 s <- stack(dist2ag, dist2water, slope, pa, lc)
 
-# rasters
-par(mfrow = c(3,2))
-for (i in 1:length(rasters)){
- plot(rasters[[i]], main = names(rasters[[i]]))
-}
-
-# histograms
-par(mfrow = c(3,2))
-for (i in 1:length(rasters)) {
- hist(rasters[[i]], breaks = 100, main = names(rasters[[i]]))
-}
+# # rasters
+# par(mfrow = c(3,2))
+# for (i in 1:length(rasters)){
+#  plot(rasters[[i]], main = names(rasters[[i]]))
+# }
+# 
+# # histograms
+# par(mfrow = c(3,2))
+# for (i in 1:length(rasters)) {
+#  hist(rasters[[i]], breaks = 100, main = names(rasters[[i]]))
+# }
 
 ## Extract raster covariates
 
@@ -105,7 +105,7 @@ summary(used)
 mode(used) = "numeric"
 used2 <- as.data.frame(used)
 used2$ID <- as.character(locs@data$id)
-colnames(used2) <- c("used", "dist2ag", "dist2water", "slope", "gHM", "pa", "dist2forest", "lc.estes","merge_id")
+colnames(used2) <- c("used", "dist2ag", "dist2water", "slope", "gHM", "pa", "lc.estes", "dist2forest", "merge_id")
 head(used2)
 
 # unstandardized data frame
