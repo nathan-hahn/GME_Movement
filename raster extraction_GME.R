@@ -88,17 +88,17 @@ summary(used)
 
 
 ## Extract raster covariates (in parallel) - testing
-library(snow)
-
-locs2 <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df,
-                                proj4string = crs(study.area))
-# Extract
-nCores <- detectCores() - 1
-beginCluster(n = nCores)
-system.time(
-  used2 <- extract(s, locs2)
-)
-endCluster()
+# library(snow)
+# 
+# locs2 <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df,
+#                                 proj4string = crs(study.area))
+# # Extract
+# nCores <- detectCores() - 1
+# beginCluster(n = nCores)
+# system.time(
+#   used2 <- extract(s, locs2)
+# )
+# endCluster()
 
 
 ####Add to Tracking DF####
