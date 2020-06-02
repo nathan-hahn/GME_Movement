@@ -69,7 +69,7 @@ used <- matrix(1, nrow = nrow(df), ncol = 8)
 locs <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df, 
                                proj4string = crs(study.area))
 
-# 13 minutes
+# ~20 minutes
 system.time({
 used[,2] <- extract(dist2ag, locs)
 used[,3] <- extract(dist2water, locs)
@@ -78,8 +78,6 @@ used[,5] <- extract(gHM, locs)
 used[,6] <- extract(pa, locs)
 used[,7] <- extract(lc, locs)
 used[,8] <- extract(dist2forest, locs)
-
-# mean NDVI?
 })
 
 # check
@@ -105,23 +103,24 @@ summary(used)
 
 # create data frame
 mode(used) = "numeric"
-used <- as.data.frame(used)
-used$ID <- as.character(locs@data$id)
-colnames(used) <- c("used", "dist2ag", "dist2water", "slope", "gHM", "pa", "dist2forest", "lc.estes","merge_id")
-head(used)
+used2 <- as.data.frame(used)
+used2$ID <- as.character(locs@data$id)
+colnames(used2) <- c("used", "dist2ag", "dist2water", "slope", "gHM", "pa", "dist2forest", "lc.estes","merge_id")
+head(used2)
 
 # unstandardized data frame
-used.df <- cbind(df, used)
+used.df <- cbind(df, used2)
 head(used.df)
 
 
 test <- subset(used.df, id != merge_id)
 nrow(test) # should be zero
-
+used.df$merge_id <- NULL
 
 ##########################################################################################
 
 ####Add season variable####
+#' Must extend season clustering to cover full extent of tracking data
 #' Assign season (wet or dry) based on season window dates indentified by seasonal NDVI mixture model. Season is added as a column to the main ele mov dataframe with covariates
 #' Wet = 1
 #' Dry = 2 
@@ -132,7 +131,7 @@ windows$start <- as.POSIXct(strptime(windows$start, format = "%Y-%m-%d %H:%M:%S"
 windows$end <- as.POSIXct(strptime(windows$end, format = "%Y-%m-%d %H:%M:%S", tz="Africa/Nairobi" ))
 
 # cut, setting breaks as the start dates and the max end date for season
-rng <- cut(used.df$Fixtime,
+rng <- cut(used.df$date,
            breaks = c(windows$start, max(windows$end)),
            include.lowest = T)
 
@@ -149,19 +148,19 @@ test <- as.data.frame(rng) %>%
 
 # attach to ele mov dataframe
 used.df <- bind_cols(used.df, test) 
-used.df$merge_id <- NULL
+
 
 ####Export####
 
 # write to rds file
-outfile <- paste0("./movdata/GMEcollars_001_used_", Sys.Date(), ".rds")
+outfile <- paste0("./movdata/GMEcollars_002_used_", Sys.Date(), ".rds")
 saveRDS(used.df, outfile)
 
-outfile <- paste0("./movdata/GMEcollars_001_used_", Sys.Date(), ".csv")
+outfile <- paste0("./movdata/GMEcollars_002_used_", Sys.Date(), ".csv")
 write.csv(used.df, outfile)
 
 # write raster stack
-saveRDS(s, "./spatial data/GME_rasterStack_20200522.rds")
+saveRDS(s, "./spatial data/GME_rasterStack_20200602.rds")
 
 ########################################################################################################
 ########################################################################################################
