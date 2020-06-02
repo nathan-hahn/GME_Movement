@@ -37,7 +37,7 @@ slope <- raster("./spatial data/slope_estes_32736_2020-05-12.tif")
 lc <- raster("./spatial data/change03_181_reclassMara_2019-11-22.tif")
 gHM <- raster("./spatial data/gHM_estes_32736_2020-05-12.tif")
 pa <- raster("./spatial data/GSEr_estes_32736_2019-11-21.tif") # protection status
-pa[!is.finite(pa)] = 1 # set no data to 'not protected' (1)
+pa <- reclassify(pa, cbind(NA, 1)) # set no data to 'not protected' (1)
 
 # downsampled sentinel classification to 30 meters to keep consistent with other proximity layers. extent different
 dist2forest <- raster("./spatial data/dist2forest_tiedmen_sentinelpts_32736_30.tif") 
