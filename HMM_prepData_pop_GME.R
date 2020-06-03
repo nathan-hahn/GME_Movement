@@ -72,14 +72,16 @@ test <- do.call("rbind", test)
 
 #' ---- create momentu objects ----
 #' Apply the velocity function by group. Create list by burst, apply function to each data.frame, and then unlist.
-#' Faster way to do this without losing momentuHMM object? 
 
 # Create objects for the MomentuHMM package: step, log step, velocity, log velocity 
 library(momentuHMM)
 
 ele.step <- prepData(data = train, coordNames = c("x", "y"))
-ele.log.step <- ele.step
-ele.log.step$step <- log(ele.log.step$step + 0.001) # add constant for zero steps
+split <- split(ele.step, ele.step$ID)
+
+individual.velocity <- lapply(split, log.velocity)
+population.velocity <- do.call("rbind", individual.velocity)
 
 # save as rdata for us on secondary machines
-saveRDS(ele.log.step, ".HMM/GMEcollars_001_logStep_train_TEST.rds")
+saveRDS(individual.velocity, "./HMM/GMEcollars_002_individual_logVeloc_train.rds")
+saveRDS(population.velocity, "./HMM/GMEcollars_002_population_logVeloc_train.rds")
