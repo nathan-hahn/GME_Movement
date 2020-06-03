@@ -6,15 +6,21 @@
 #' 2. Landscape Metrics
 #' 3. ANOVA on Ag Tactics
 
-library(dplyr)
-library(adehabitatHR)
-library(raster)
-library(landscapemetrics)
-library(ggplot2)
+
+library(dplyr, warn.conflicts = FALSE, quietly = TRUE)
+library(adehabitatHR, warn.conflicts = FALSE, verbose = FALSE, quietly = TRUE)
+library(raster, warn.conflicts = FALSE, quietly = TRUE)
+library(landscapemetrics, warn.conflicts = FALSE, quietly = TRUE)
+library(car, warn.conflicts = FALSE, quietly = TRUE)
+library(ggplot2, warn.conflicts = FALSE, quietly = TRUE)
+
 
 # GME movement data - 2019
 gme <- readRDS("./GMM/GMEcollars_002_usedClust_2020-06-02.rds")
+stack <- readRDS("./spatial data/GME_rasterStack_20200602.rds")
 
+
+#' ### Build homeranges
 # prep spdf
 t <-  filter(gme, !is.na(x)) %>%
   dplyr::select(x, y, subject_name) 
@@ -25,8 +31,6 @@ split <- split(t, t$subject_name)
 mcp <- lapply(split, mcp)
 
 ##### cut raster stack by 
-s <- readRDS("./spatial data/GME_rasterStack_20200602.rds")
-
 mask.poly.raster <- function(poly, raster) {
   # crop raster to polygon extent
   cr <- crop(raster, extent(poly), snap = "out")
@@ -37,7 +41,7 @@ mask.poly.raster <- function(poly, raster) {
 
 # mask landcover raster to homeranges
 system.time(
-  mcp.rast <- lapply(mcp, mask.poly.raster, raster = s$change03_181_reclassMara_2019.11.22)
+  mcp.rast <- lapply(mcp, mask.poly.raster, raster = stack$change03_181_reclassMara_2019.11.22)
 )
 
 #' ### Landscape Metrics
@@ -51,8 +55,6 @@ t <- gme %>% group_by(subject_name, ag.class.both) %>% tally()
 l <- Map(cbind, metrics, subject_name = names(metrics), ag.class = t$ag.class.both)
 # create metrics dataframe
 metrics.df <- do.call("rbind", l)
-# for class-level metrics only - filter to ag(1) or natural(2) class 
-#metrics.df <- filter(metrics.df, class == 1) %>% droplevels()
 
 #' Plots of homeranges with contagion metric results
 #' Yellow = Ag, Green = Natural Habitat
@@ -81,6 +83,14 @@ plot(mcp.rast$Olchoda, main = paste0("Habitual: Olchoda, cont=", round(metrics$F
 #' or LoCoH to improve on this. 
 
 ##### ANOVA #####
+# Data Summary
+summary <- metrics.df %>%
+  group_by(ag.class) %>%
+  summarise(n = n(),
+            contagion.median = median(value),
+            contagion.sd = sd(value))
+(summary)
+
 
 # ANOVA
 # Compute the analysis of variance
@@ -103,10 +113,5 @@ plot(res.aov, 1)
 
 #' 2. Check normality of metric distribution among the tactic groups
 #' Looks ok
-summary <- metrics.df %>%
-  group_by(ag.class) %>%
-  summarise(n = n(),
-            ed.median = median(value))
-
 p <- ggplot(metrics.df, aes(x = value, fill = ag.class)) + geom_density(alpha = 0.6)
 p
