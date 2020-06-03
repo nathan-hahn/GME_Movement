@@ -1,14 +1,23 @@
-##### GME Home Ranges #####
+#' ## Home Range Analysis
+#' Test for differences in landscape and ag structure between individual homeranges
+#' Are there significant differences in the homerange landscape structure between the ag tactic groups?
+#' 
+#' 1. MCP homeranges
+#' 2. Landscape Metrics
+#' 3. ANOVA on Ag Tactics
 
+library(dplyr)
 library(adehabitatHR)
+library(raster)
+library(landscapemetrics)
+library(ggplot2)
 
 # GME movement data - 2019
-gme <- readRDS("./movdata/GMEcollars_002_clean_2020-05-21.rds")
+gme <- readRDS("./GMM/GMEcollars_002_usedClust_2020-06-02.rds")
 
 # prep spdf
 t <-  filter(gme, !is.na(x)) %>%
   dplyr::select(x, y, subject_name) 
-  #filter(subject_name %in% c("Tressa", "Fred", "Olchoda")) 
 coordinates(t) <-~x+y
 
 # build MCP's by subject_name
@@ -16,7 +25,7 @@ split <- split(t, t$subject_name)
 mcp <- lapply(split, mcp)
 
 ##### cut raster stack by 
-s <- readRDS("./spatial data/GME_rasterStack_20200522.rds")
+s <- readRDS("./spatial data/GME_rasterStack_20200602.rds")
 
 mask.poly.raster <- function(poly, raster) {
   # crop raster to polygon extent
@@ -31,30 +40,73 @@ system.time(
   mcp.rast <- lapply(mcp, mask.poly.raster, raster = s$change03_181_reclassMara_2019.11.22)
 )
 
-saveRDS(mcp.rast, paste0("./homerange/GME_mcp_rasters_002", Sys.Date(),".rds"))
+#' ### Landscape Metrics
+##### Landscape Metrics #####
 
+# calculate a metric for all individual homeranges
+metrics <- lapply(mcp.rast, lsm_l_contag)
 
-# landscape metrics
-library(landscapemetrics)
-library(landscapetools)
+# add relevant metadata to each list element
+t <- gme %>% group_by(subject_name, ag.class.both) %>% tally() 
+l <- Map(cbind, metrics, subject_name = names(metrics), ag.class = t$ag.class.both)
+# create metrics dataframe
+metrics.df <- do.call("rbind", l)
+# for class-level metrics only - filter to ag(1) or natural(2) class 
+#metrics.df <- filter(metrics.df, class == 1) %>% droplevels()
 
-lsm_l_ed(mcp.rast$Olchoda)
-lsm_l_ed(mcp.rast$Kimbizwa)
-
-metrics <- lapply(mcp.rast, lsm_l_ed)
-names(metrics) <- levels(as.factor(gme$subject_name))
-t <- do.call("rbind", metrics)
-t$subject_name <- levels(as.factor(gme$subject_name))
-
+#' Plots of homeranges with contagion metric results
+#' Yellow = Ag, Green = Natural Habitat
 par(mfrow = c(2,2))
 cuts = c(0,1,2,3,4)
 pal = colorRampPalette(c('white', "yellow", "dark green", "dark grey", "grey"))
-plot(mcp.rast$Alina, main = paste0("Sporadic: Alina, ed=", round(metrics$Alina$value, 2)),
+plot(mcp.rast$Alina, main = paste0("Sporadic: Alina, cont=", round(metrics$Alina$value, 2)),
      col = pal(5))
-plot(mcp.rast$Fred, main = paste0("Mixed Seasonal: Fred, ed=", round(metrics$Fred$value,2)),
+plot(mcp.rast$Fred, main = paste0("Mixed Seasonal: Fred, cont=", round(metrics$Fred$value,2)),
      col = pal(5))
-plot(mcp.rast$Kimbizwa, main = paste0("Seasonal: Kimbizwa, ed=", round(metrics$Kimbizwa$value,2)),
+plot(mcp.rast$Kimbizwa, main = paste0("Seasonal: Kimbizwa, cont=", round(metrics$Kimbizwa$value,2)),
      col = pal(5))
-plot(mcp.rast$Olchoda, main = paste0("Habitual: Olchoda, ed=", round(metrics$Olchoda$value, 2)),
+plot(mcp.rast$Olchoda, main = paste0("Habitual: Olchoda, cont=", round(metrics$Fitz$value, 2)),
      col = pal(5))
 
+#' ### ANOVA
+#' Looked at 5 metrics. Many had issues meeting the variance assumption due to the small sample size of the 
+#' Habitual group (n = 8). Contagion produced the best results, although it may be a poor metric for comparing 
+#' landscapes which have differnt proportions of habitat (Wong et al. 2014)
+#' 
+#' Metrics recommended by Wong et al. 2014 for comparing across landscapes with unequal proportions of habitat 
+#' did not produce significant results. 
+#' 
+#' The way the homerange is defined also likely influences these metrics. MCP is course and for some individuals
+#' can include a much larger amount of ag than they are actually accessing (see above plots). Could look at KDE 
+#' or LoCoH to improve on this. 
+
+##### ANOVA #####
+
+# ANOVA
+# Compute the analysis of variance
+res.aov <- aov(value ~ ag.class, data = metrics.df)
+# Summary of the analysis
+summary(res.aov)
+
+# Tukey
+tukey <- TukeyHSD(res.aov)
+(tukey)
+
+#' #### Check assumptions
+#' 1. Homogeneity of variances
+#' Small number of individuals in habitual ag class create some issues with variance assumption
+#' Plot of residuals shows megaphone shape - not good! 
+library(car)
+leveneTest(value ~ ag.class, data = metrics.df)
+
+plot(res.aov, 1)
+
+#' 2. Check normality of metric distribution among the tactic groups
+#' Looks ok
+summary <- metrics.df %>%
+  group_by(ag.class) %>%
+  summarise(n = n(),
+            ed.median = median(value))
+
+p <- ggplot(metrics.df, aes(x = value, fill = ag.class)) + geom_density(alpha = 0.6)
+p
