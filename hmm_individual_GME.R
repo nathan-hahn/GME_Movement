@@ -39,13 +39,13 @@ par1 <- list(step = c(1, 4, 6, 2, 1, 1),
 #' Each model runs, reports sys.time, and saves 
 
 library(doParallel)
-cl <- makeCluster(7)
+cl <- makeCluster(2)
 registerDoParallel(cl)
 
 
 library(foreach)
 system.time({
-  m1.indiv <- foreach::foreach(i = 1:42) %dopar% 
+  m1.indiv <- foreach::foreach(i = 1:2) %dopar% 
     momentuHMM::fitHMM(data = indiv.log.velocity[[i]], nbStates = 3, dist = distNorm,
                        Par0 = par1,
                        retryFits = 4,
@@ -55,7 +55,7 @@ system.time({
   
 })
 
-saveRDS(m1.indiv, "m1_individual.rds")
+saveRDS(m1.indiv, "./HMM/TEST_m1_individual.rds")
 
 # get viterbi estimates and extract data frames
 temp <- list()
@@ -68,5 +68,5 @@ for (i in 1:length(m1.indiv)) {
 result.mfit <- do.call(rbind, temp)
 
 # save dataframes  
-saveRDS(result.mfit, "df_mfit_indiv.rds")
+saveRDS(result.mfit, "./HMM/TEST_m1_indiv_df.rds")
 

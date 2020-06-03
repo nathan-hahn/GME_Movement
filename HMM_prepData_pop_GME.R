@@ -48,7 +48,7 @@ used.st <- filter(used.st, ID %in% t$ID) %>% droplevels()
 
 # divide datasets by individual
 split <- split(used.st, used.st$ID)
-#split <- c(split[1], split[3]) #TEMP -- only use Caroline and Kegol
+split <- c(split[1], split[6]) #TEMP -- only use Alina and Kegol
 
 withold <- function(x, cut, type) {
   n <- nrow(x)*cut
