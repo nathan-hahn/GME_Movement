@@ -10,44 +10,21 @@ source("~/Dropbox (Personal)/R/Functions/velocity.R")
 used.all <- readRDS("./GMM/GMEcollars_002_usedClust_2020-06-02.rds")
 used.all <- used.all[!is.na(used.all$x),]
 
-# standardize covariates
-cor.vars <- c("dist2ag", "dist2forest", "dist2water", "slope")
-st.covs <- used.all %>%
-  dplyr::select(all_of(cor.vars))%>%
-  apply(., 2, function(x) (x - mean(x)) / sd(x)) %>%
-  as.data.frame()
-
-# check dimensions
-dim(st.covs)
-
-# merge with reloc data
-used.st <- used.all %>%
-  dplyr::select(-all_of(cor.vars)) %>%
-  bind_cols(., st.covs) %>%
-  rename(ID = burst) %>% #for HMM package
-  droplevels()
-
-
-# must be a dataframe to work!! 
-used.st <- as.data.frame(used.st)
-saveRDS(used.st, "./HMM/GMEcollars_001_usedClustST_2020-05-14.rds")
-
-
 #' ---- Create Test/Train Sets ----
 #' Split the data into testing and training sets
 #' Last n% of each burst for the testing, defined by 'cut'
 
 
 # filter to bursts that are large enough for test/train
-t <- used.st %>%
-  group_by(ID, subject_name) %>% tally() %>%
+t <- used.all %>%
+  group_by(burst, subject_name) %>% tally() %>%
   mutate(train = n*.90, test = n*.10) %>%
   filter(train > 500 & test > 500) %>% droplevels()
 
-used.st <- filter(used.st, ID %in% t$ID) %>% droplevels()
+used.all <- filter(used.all, burst %in% t$burst) %>% droplevels()
 
 # divide datasets by individual
-split <- split(used.st, used.st$ID)
+split <- split(used.all, used.all$burst)
 split <- c(split[1], split[6]) #TEMP -- only use Alina and Kegol
 
 withold <- function(x, cut, type) {
@@ -69,6 +46,31 @@ train <- lapply(split, withold, cut = cut, type = "train")
 train <- do.call("rbind", train)
 test <- lapply(split, withold, cut = cut, type = "test")
 test <- do.call("rbind", test)
+
+# save dataframe to be able to revert to unstandadized and non-log distances
+saveRDS(train, "./HMM/TEST_traindf_original.rds")
+
+
+#' ---- Standardize Covariates ----
+# standardize covariates
+cor.vars <- c("dist2ag", "dist2forest", "dist2water", "slope")
+st.covs <- used.all %>%
+  dplyr::select(all_of(cor.vars))%>%
+  apply(., 2, function(x) (x - mean(x)) / sd(x)) %>%
+  as.data.frame()
+
+# check dimensions
+dim(st.covs)
+
+# merge with reloc data
+used.st <- used.all %>%
+  dplyr::select(-all_of(cor.vars)) %>%
+  bind_cols(., st.covs) %>%
+  rename(ID = burst) %>% #for HMM package
+  droplevels()
+# must be a dataframe to work!! 
+used.st <- as.data.frame(used.st)
+
 
 #' ---- create momentu objects ----
 #' Apply the velocity function by group. Create list by burst, apply function to each data.frame, and then unlist.
