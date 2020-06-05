@@ -14,9 +14,10 @@ hmm.df <- readRDS("./HMM/TEST_m1_indiv_df.rds")
 output <- readRDS("./HMM/TEST_traindf_original.rds")
 
 output$viterbi <- hmm.df$viterbi
-
 output$ag.used <- ifelse(output$lc.estes == 1, 1, 0)
-output$pa.2 <- as.factor(output$ag.used + as.numeric(output$pa))
+output$pa <- factor(output$pa, levels = c(3:1))
+output$pa.2 <- ifelse(output$pa == 1 & output$ag.used == 1, 4, output$pa)
+
 
 ###### Identify Ag Use Windows #####
 
@@ -30,14 +31,14 @@ rollstat <- function(x, na.rm = TRUE) {
   hi <- m + 2*s
   lo <- m - 2*s
   max <- max(x) # all points within the window will be labeled 1 - signals a "raiding period" for activity budgets/plotting
-  
-  ret <- c(mean = m, stdev = s, hi.95 = hi, lo.95 = lo, max = max) 
+
+  ret <- c(mean = m, stdev = s, hi.95 = hi, lo.95 = lo, ag.window = max) 
   return(ret)
 }
 
 # Apply rollstat. Create time series and apply rollstat function
 window <- 25 # in hours. Split to before and after when align = center
-split <- split(output, output$ID) # careful of what you split by. May cuase problems splitting by name if there are large gaps between recollars. Let na.rm = FALSE in rollstat
+split <- split(output, output$burst) # careful of what you split by. May cuase problems splitting by name if there are large gaps between recollars. Let na.rm = FALSE in rollstat
 
 system.time({
   ts <- lapply(split, as.ts, start = split[[i]]$date, frequency = 1) # frequency set with 30min fixes
@@ -52,7 +53,7 @@ output <- do.call("rbind", merge)
 ##### Activity Budgets #####
 
 t <- output %>%
-  group_by(burst, pa.2, lc.estes) %>%
+  group_by(burst, pa, lc.estes) %>%
   filter(lc.estes == 1) %>%
   tally()
 
@@ -69,6 +70,12 @@ output <- mutate(output, viterbi = recode_factor(viterbi,
                                       "3" = "not protected", "4" = "ag")
 ) 
 
+
+# fix NAs for the ag window
+t <- ifelse(is.na(output$ag.window) == TRUE, 0, output$ag.window)
+output$ag.window <- as.factor(t)
+
+
 ## Density plots v2
 theme_set(  theme_bw() + # set theme with no legend of strip text
               theme(panel.grid.major = element_blank(),
@@ -80,7 +87,7 @@ theme_set(  theme_bw() + # set theme with no legend of strip text
 )
 
 
-plot_budget <- function(t=t, facet = viterbi~., title){
+plot_budget <- function(t=t, facet, title){
   ggplot(t, aes(hour(date))) +
     facet_grid(facet) +
     geom_density(aes(x = hour(date),
@@ -98,11 +105,11 @@ plot_budget <- function(t=t, facet = viterbi~., title){
     xlab("hour (0-23)") + ggtitle(title)
 }
 
-# budget by ag.class.mean
-plot_budget(t = output, facet = viterbi ~ ag.class.mean, title = "ag.class.mean")
+# budget by ag window
+plot_budget(t = output, facet = viterbi ~ as.factor(max), title = "ag.class.mean")
 
 # budget by land use
-plot_budget(t = output, facet = viterbi ~ pa.2, title = "GR: Activity budget by land use type")
+plot_budget(t = output, facet = viterbi ~ pa.2, title = "GME: Activity budget by land use type")
 
 
 
