@@ -1,8 +1,8 @@
 
-library(dplyr)
+library(tidyverse)
 library(momentuHMM)
 
-source("~/Dropbox (Personal)/R/Functions/velocity.R")
+source("C:/Users/nhahn/Dropbox (Personal)/R/Functions/velocity.R")
 
 #' ---- Prep data for HMM population model fitting ----
 
@@ -56,8 +56,8 @@ saveRDS(train, "./HMM/TEST_traindf_original.rds")
 #' ---- Standardize Covariates ----
 # standardize covariates
 cor.vars <- c("dist2ag", "dist2forest", "dist2water", "slope")
-st.covs <- used.all %>%
-  dplyr::select(all_of(cor.vars))%>%
+st.covs <- train %>%
+  dplyr::select(cor.vars)%>%
   apply(., 2, function(x) (x - mean(x)) / sd(x)) %>%
   as.data.frame()
 
@@ -65,13 +65,13 @@ st.covs <- used.all %>%
 dim(st.covs)
 
 # merge with reloc data
-used.st <- used.all %>%
-  dplyr::select(-all_of(cor.vars)) %>%
+train.st <- train %>%
+  dplyr::select(-cor.vars) %>%
   bind_cols(., st.covs) %>%
   rename(ID = burst) %>% #for HMM package
   droplevels()
 # must be a dataframe to work!! 
-used.st <- as.data.frame(used.st)
+train.st <- as.data.frame(train.st)
 
 
 #' ---- create momentu objects ----
@@ -80,7 +80,7 @@ used.st <- as.data.frame(used.st)
 # Create objects for the MomentuHMM package: step, log step, velocity, log velocity 
 library(momentuHMM)
 
-ele.step <- prepData(data = used.st, coordNames = c("x", "y"))
+ele.step <- prepData(data = train.st, coordNames = c("x", "y"))
 split <- split(ele.step, ele.step$ID)
 
 individual.velocity <- lapply(split, log.velocity)
