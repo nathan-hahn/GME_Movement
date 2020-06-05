@@ -40,7 +40,7 @@ output$pa.2 <- ifelse(output$pa == 1 & output$ag.used == 1, 4, output$pa)
 ###### Identify Ag Use Windows #####
 
 # Apply rollstat. Create time series and apply rollstat function
-window <- 49 # in hours. Split to before and after when align = center
+window <- 25 # in hours. Split to before and after when align = center
 split <- split(output, output$burst) # careful of what you split by. May cuase problems splitting by name if there are large gaps between recollars. Let na.rm = FALSE in rollstat
 
 system.time({
@@ -55,16 +55,6 @@ output <- do.call("rbind", merge)
 
 ##### Activity Budgets #####
 
-t <- output %>%
-  group_by(burst, pa, lc.estes) %>%
-  filter(lc.estes == 1) %>%
-  tally()
-
-# output$ag <- ifelse(output$lc.estes == 1, 1, 0) # calculate ag.used (0,1)
-# output$p <- ifelse(output$pa == "protected", 1, 0) # calculate ag.used (0,1)
-# output$np <- ifelse(output$pa == "not protected", 1, 0) # calculate ag.used (0,1)
-# output$lu <- ifelse(output$pa == "limited use", 1, 0) # calculate ag.used (0,1)
-
 output.plot <- mutate(output, viterbi = recode_factor(viterbi, 
                                                  "1" = "encamped",
                                                  "2" = "foraging",
@@ -78,6 +68,11 @@ output.plot <- mutate(output, viterbi = recode_factor(viterbi,
 t <- ifelse(is.na(output.plot$ag.window) == TRUE, 0, output.plot$ag.window)
 output.plot$ag.window <- as.factor(t)
 
+# check data before plotting -- are there enough points for a density plot?
+t <- output %>%
+  group_by(burst, ag.window, viterbi) %>%
+  tally()
+(t)
 ## Density plots v2
 theme_set(  theme_bw() + # set theme with no legend of strip text
               theme(panel.grid.major = element_blank(),
@@ -109,11 +104,11 @@ plot_budget <- function(t=t, facet, title){
 }
 
 # budget by ag window
-plot_budget(t = output.plot, facet = viterbi ~ ag.window, title = "GME: Activity budget by ag window")
-
+agWindow <- plot_budget(t = output.plot, facet = viterbi ~ ag.window, title = "GME: Activity budget by ag window")
+agWindow
 # budget by land use
-plot_budget(t = output.plot, facet = viterbi ~ pa.2, title = "GME: Activity budget by land use type")
-
+landUse <- plot_budget(t = output.plot, facet = viterbi ~ pa.2, title = "GME: Activity budget by land use type")
+landUse
 
 
 
