@@ -7,8 +7,10 @@ source("~/Dropbox (Personal)/R/Functions/velocity.R")
 #' ---- Prep data for HMM population model fitting ----
 
 # Add data with raster covariates. 
-used.all <- readRDS("./GMM/GMEcollars_002_usedClust_2020-06-02.rds")
+used.all <- readRDS("./GMM/GMEcollars_002_usedClust_2020-06-05.rds")
 used.all <- used.all[!is.na(used.all$x),]
+used.all <- used.all %>%
+  filter(fixType != "irregular")
 
 #' ---- Create Test/Train Sets ----
 #' Split the data into testing and training sets
@@ -17,7 +19,7 @@ used.all <- used.all[!is.na(used.all$x),]
 
 # filter to bursts that are large enough for test/train
 t <- used.all %>%
-  group_by(burst, subject_name) %>% tally() %>%
+  group_by(burst, subject_name, ag.class.both) %>% tally() %>%
   mutate(train = n*.90, test = n*.10) %>%
   filter(train > 500 & test > 500) %>% droplevels()
 
@@ -25,7 +27,7 @@ used.all <- filter(used.all, burst %in% t$burst) %>% droplevels()
 
 # divide datasets by individual
 split <- split(used.all, used.all$burst)
-split <- c(split[1], split[6]) #TEMP -- only use Alina and Kegol
+split <- c(split[1], split[2], split[6], split[14], split[23]) #TEMP -- only use Alina and Kegol
 
 withold <- function(x, cut, type) {
   n <- nrow(x)*cut
@@ -78,7 +80,7 @@ used.st <- as.data.frame(used.st)
 # Create objects for the MomentuHMM package: step, log step, velocity, log velocity 
 library(momentuHMM)
 
-ele.step <- prepData(data = train, coordNames = c("x", "y"))
+ele.step <- prepData(data = used.st, coordNames = c("x", "y"))
 split <- split(ele.step, ele.step$ID)
 
 individual.velocity <- lapply(split, log.velocity)
