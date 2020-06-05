@@ -93,9 +93,9 @@ plot_budget <- function(t=t, facet, title){
   
   # add day/night lines - code for shading below
   geom_vline(aes(xintercept=6),
-             color="blue", linetype="dashed", size=1) +
+             color="dark grey", linetype="dashed", size=1) +
     geom_vline(aes(xintercept=18),
-               color="blue", linetype="dashed", size=1) +
+               color="dark grey", linetype="dashed", size=1) +
     
     # add colors
     scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("state")) +
