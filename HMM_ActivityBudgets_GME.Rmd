@@ -1,0 +1,129 @@
+---
+title: "Activity Moving Windows"
+author: "Nathan Hahn"
+date: "6/5/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(xts)
+library(zoo)
+theme_set(  theme_bw() + # set theme with no legend of strip text
+              theme(panel.grid.major = element_blank(),
+                    strip.background = element_blank(),
+                    panel.border = element_rect(colour = "black"),
+                    strip.text = element_text(size = 12),
+                    legend.text = element_text(size = 10),
+                    panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), axis.title=element_text(size=14), axis.text = element_text(size=12))
+)
+
+# function to return stats from roll apply
+rollstat <- function(x, na.rm = TRUE) {
+  # x     = numeric vector
+  # na.rm = boolean, whether or not to remove NA's
+  
+  m  <- mean(x, na.rm = na.rm)
+  s  <- sd(x, na.rm = na.rm)
+  hi <- m + 2*s
+  lo <- m - 2*s
+  max <- max(x) # all points within the window will be labeled 1 - signals a "raiding period" for activity budgets/plotting
+  
+  ret <- c(mean = m, stdev = s, hi.95 = hi, lo.95 = lo, ag.window = max) 
+  return(ret)
+}
+
+# function for plotting activity budgets
+plot_budget <- function(t=t, facet, title){
+  ggplot(t, aes(hour(date))) +
+    facet_grid(facet) +
+    geom_density(aes(x = hour(date),
+                     fill = factor(viterbi), colour = factor(viterbi)), alpha = 0.3, adjust = 1.5) +
+  
+  # add day/night lines - code for shading below
+  geom_vline(aes(xintercept=6),
+             color="dark grey", linetype="dashed", size=1) +
+    geom_vline(aes(xintercept=18),
+               color="dark grey", linetype="dashed", size=1) +
+    
+    # add colors
+    scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("state")) +
+    scale_colour_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("state")) +
+    xlab("hour (0-23)") + ggtitle(title)
+}
+```
+
+```{r cars}
+##### Prep Data #####
+hmm.df <- readRDS("./HMM/TEST_m1_indiv_df.rds")
+output <- readRDS("./HMM/TEST_traindf_original.rds")
+
+# add viterbi estimates to the original dataframe -- revert to non-standardized covs and steps
+output$viterbi <- hmm.df$viterbi
+# create new varibles to differentiate ag and non-ag in non-protected areas
+output$ag.used <- ifelse(output$lc.estes == 1, 1, 0)
+output$pa <- factor(output$pa, levels = c(3:1))
+output$pa.2 <- ifelse(output$pa == 1 & output$ag.used == 1, 4, output$pa)
+
+```
+
+```{r}
+###### Identify Ag Use Windows #####
+
+# Apply rollstat. Create time series and apply rollstat function
+window <- 25 # in hours. Split to before and after when align = center
+split <- split(output, output$burst) # careful of what you split by. May cuase problems splitting by name if there are large gaps between recollars. Let na.rm = FALSE in rollstat
+
+system.time({
+  ts <- lapply(split, as.ts, start = split[[i]]$date, frequency = 1) # frequency set with 30min fixes
+  tx <- lapply(ts, as.xts)
+  res <- lapply(seq_along(tx), function(i) rollapply(tx[[i]]$ag.used, width = window, align = "center", by.column = FALSE,
+                                                     FUN = rollstat, na.rm = FALSE))
+  merge <- lapply(seq_along(res), function(i) cbind(split[[i]], as.data.frame(res[[i]])))
+})
+
+output <- do.call("rbind", merge)
+```
+
+The three plots below show comparisons of activity budgets of 5 elephants when they are in non-ag (0) and in an ag matrix (1). The window sizes are incrementally increased to inspect the sensitivity of the activity budgets to the choice of window size. They appear highly sensitive, where larger windows smooth over differences. This is likely due to elephants quickly returning to normal activity when not raiding. 
+
+A fourth graph is included of activity by land-use type for comparison. The differences are much clearer using the window approach. 
+```{r}
+##### Activity Budgets #####
+
+output.plot <- mutate(output, viterbi = recode_factor(viterbi, 
+                                                 "1" = "encamped",
+                                                 "2" = "foraging",
+                                                 "3" = "transit"),
+                 pa.2 = recode_factor(pa.2, "1" = "protected", "2" = "limited use", 
+                                      "3" = "not protected", "4" = "ag")
+) 
+
+# fix NAs for the ag window
+t <- ifelse(is.na(output.plot$ag.window) == TRUE, 0, output.plot$ag.window)
+output.plot$ag.window <- as.factor(t)
+
+# check data before plotting -- are there enough points for a density plot?
+t <- output %>%
+  group_by(burst, ag.window, viterbi) %>%
+  tally()
+(t)
+
+## Density plots
+
+# budgets by ag window
+x.12 <- plot_budget(t = output.plot, facet = viterbi ~ ag.window, title = "GME: Activity budget with 12 hour window")
+agWindow
+
+x.24 <- plot_budget(t = output.plot, facet = viterbi ~ ag.window, title = "GME: Activity budget with 24 hour window")
+agWindow
+
+x.48 <- plot_budget(t = output.plot, facet = viterbi ~ ag.window, title = "GME: Activity budget with 48 hour window")
+agWindow
+
+# budget by land use
+landUse <- plot_budget(t = output.plot, facet = viterbi ~ pa.2, title = "GME: Activity budget by land use type")
+landUse
+```
