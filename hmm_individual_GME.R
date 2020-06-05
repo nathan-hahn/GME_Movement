@@ -45,7 +45,7 @@ registerDoParallel(cl)
 
 library(foreach)
 system.time({
-  m1.indiv <- foreach::foreach(i = 1:2) %dopar% 
+  m1.indiv <- foreach::foreach(i = 1:5) %dopar% 
     momentuHMM::fitHMM(data = indiv.log.velocity[[i]], nbStates = 3, dist = distNorm,
                        Par0 = par1,
                        retryFits = 4,
@@ -61,12 +61,41 @@ saveRDS(m1.indiv, "./HMM/TEST_m1_individual.rds")
 temp <- list()
 
 for (i in 1:length(m1.indiv)) {
-  m.indiv[[i]]$data$viterbi <- viterbi(m.indiv[[i]])
-  temp[[i]] <- m.indiv[[i]]$data
+  m1.indiv[[i]]$data$viterbi <- viterbi(m1.indiv[[i]])
+  temp[[i]] <- m1.indiv[[i]]$data
 }
 
 result.mfit <- do.call(rbind, temp)
 
 # save dataframes  
 saveRDS(result.mfit, "./HMM/TEST_m1_indiv_df.rds")
+
+
+
+library(foreach)
+system.time({
+  m2.indiv <- foreach::foreach(i = 1:5) %dopar% 
+    momentuHMM::fitHMM(data = indiv.log.velocity[[i]], nbStates = 3, dist = distNorm,
+                       Par0 = par1,
+                       retryFits = 4,
+                       stateNames = stateNames3,
+                       formula = ~ dist2ag + dist2forest + dist2water + gHM,
+                       modelName = "dist2ag + dist2forest + dist2water + gHM")
+  
+})
+
+saveRDS(m2.indiv, "./HMM/TEST_m2_individual.rds")
+
+# get viterbi estimates and extract data frames
+temp <- list()
+
+for (i in 1:length(m2.indiv)) {
+  m2.indiv[[i]]$data$viterbi <- viterbi(m2.indiv[[i]])
+  temp[[i]] <- m2.indiv[[i]]$data
+}
+
+result.mfit <- do.call(rbind, temp)
+
+# save dataframes  
+saveRDS(result.mfit, "./HMM/TEST_m2_indiv_df.rds")
 
