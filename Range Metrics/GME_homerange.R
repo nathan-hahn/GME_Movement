@@ -34,7 +34,7 @@ mcp <- lapply(split, mcp)
 ##### cut raster stack by 
 # mask landcover raster to homeranges
 system.time(
-  mcp.rast <- lapply(mcp, mask.poly.raster, raster = stack$change03_181_reclassMara_2019.11.22)
+  mcp.rast <- lapply(mcp, mask_poly_raster, raster = stack$change03_181_reclassMara_2019.11.22)
 )
 
 #' ### Landscape Metrics

@@ -70,7 +70,7 @@ library(momentuHMM)
 ele.step <- prepData(data = train.st, coordNames = c("x", "y"))
 split <- split(ele.step, ele.step$ID)
 
-individual.velocity <- lapply(split, log.velocity)
+individual.velocity <- lapply(split, log_velocity)
 population.velocity <- do.call("rbind", individual.velocity)
 
 # save as rdata for us on secondary machines
