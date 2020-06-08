@@ -35,6 +35,26 @@ rollstat <- function(x, na.rm = TRUE) {
   return(ret)
 }
 
+# Get rollstats for a list of individuals. Supply list of individuals and windows(s) to apply
+window_stats <- function(df.list, windows){
+  require(zoo)
+  require(xts)
+  system.time({
+    # Calculate moving window stats
+    ts <- lapply(df.list, as.ts, start = df.list[[i]]$date, frequency = 1) # frequency set with 30min fixes
+    tx <- lapply(ts, as.xts)
+    res <- lapply(seq_along(tx), function(i) rollapply(tx[[i]]$ag.used, width = window, align = "center",
+                by.column = FALSE, FUN = rollstat, na.rm = FALSE))
+      res <- lapply(res, as.data.frame) # converting inline with Map() doesn't work
+    
+    # merge outputs into data frame for each individual
+    merge <- Map(cbind, df.list, res)
+    output <- do.call("rbind", merge)
+    
+    return(output)
+ })
+}
+
 # function for plotting activity budgets
 plot_budget <- function(t=t, facet, title){
   ggplot(t, aes(hour(date))) +
@@ -55,10 +75,13 @@ plot_budget <- function(t=t, facet, title){
 }
 ```
 
+### Prep Data
+
+Add viterbi estimates to the original data (pretransformation of step lengths and covariates)
 ```{r cars}
 ##### Prep Data #####
-hmm.df <- readRDS("./HMM/TEST_m1_indiv_df.rds")
-output <- readRDS("./HMM/TEST_traindf_original.rds")
+hmm.df <- readRDS("../HMM/model results/TEST_m2_indiv_df.rds") # output from hmm model (no squared term)
+output <- readRDS("../HMM/model results/TEST_traindf_original.rds") # dataset prior to data transforms
 
 # add viterbi estimates to the original dataframe -- revert to non-standardized covs and steps
 output$viterbi <- hmm.df$viterbi
@@ -69,30 +92,22 @@ output$pa.2 <- ifelse(output$pa == 1 & output$ag.used == 1, 4, output$pa)
 
 ```
 
-```{r}
+```{r, warning=FALSE}
 ###### Identify Ag Use Windows #####
 
-# Apply rollstat. Create time series and apply rollstat function
-window <- 25 # in hours. Split to before and after when align = center
-split <- split(output, output$burst) # careful of what you split by. May cuase problems splitting by name if there are large gaps between recollars. Let na.rm = FALSE in rollstat
+split <- split(output, output$burst)
+windows <- c(13,25,49) # in hours. Split to before and after when align = center
 
-system.time({
-  ts <- lapply(split, as.ts, start = split[[i]]$date, frequency = 1) # frequency set with 30min fixes
-  tx <- lapply(ts, as.xts)
-  res <- lapply(seq_along(tx), function(i) rollapply(tx[[i]]$ag.used, width = window, align = "center", by.column = FALSE,
-                                                     FUN = rollstat, na.rm = FALSE))
-  merge <- lapply(seq_along(res), function(i) cbind(split[[i]], as.data.frame(res[[i]])))
-})
+t <- NULL
+for(i in 1:length(windows)){
+  t[[i]] <- window_stats(df.list = split, windows = windows[i])
+}
 
-output <- do.call("rbind", merge)
 ```
 
-The three plots below show comparisons of activity budgets of 5 elephants when they are in non-ag (0) and in an ag matrix (1). The window sizes are incrementally increased to inspect the sensitivity of the activity budgets to the choice of window size. They appear highly sensitive, where larger windows smooth over differences. This is likely due to elephants quickly returning to normal activity when not raiding. 
-
-A fourth graph is included of activity by land-use type for comparison. The differences are much clearer using the window approach. 
+### Activty Budgets
 ```{r}
-##### Activity Budgets #####
-
+##### Create df for plotting #####
 output.plot <- mutate(output, viterbi = recode_factor(viterbi, 
                                                  "1" = "encamped",
                                                  "2" = "foraging",
@@ -106,12 +121,18 @@ t <- ifelse(is.na(output.plot$ag.window) == TRUE, 0, output.plot$ag.window)
 output.plot$ag.window <- as.factor(t)
 
 # check data before plotting -- are there enough points for a density plot?
-t <- output %>%
+t <- output.plot %>%
   group_by(burst, ag.window, viterbi) %>%
   tally()
 (t)
+```
 
-## Density plots
+The three plots below show comparisons of activity budgets of 5 elephants when they are in non-ag (0) and in an ag matrix (1). The window sizes are incrementally increased to inspect the sensitivity of the activity budgets to the choice of window size. They appear highly sensitive, where larger windows smooth over differences. This is likely due to elephants quickly returning to normal activity when not raiding. 
+
+A fourth graph is included of activity by land-use type for comparison. The differences are much clearer using the window approach. 
+
+```{r}
+##### Activity Budgets #####
 
 # budgets by ag window
 x.12 <- plot_budget(t = output.plot, facet = viterbi ~ ag.window, title = "GME: Activity budget with 12 hour window")
