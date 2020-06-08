@@ -83,7 +83,7 @@ velocity <- function(df, dateTime) {
 
 
 ##### log.velocity #####
-log.velocity <- function(df) {
+log_velocity <- function(df) {
   require(rlist)
   # calculate time differences
   tdiff <- diff(df$date)
@@ -101,4 +101,31 @@ log.velocity <- function(df) {
   # attach to the data.frame
   df$step <- log(speed + 0.001) # add constant for zero steps
   return(df)
+}
+
+
+##### mask.poly.raster #####
+mask_poly_raster <- function(poly, raster) {
+  # crop raster to polygon extent
+  cr <- crop(raster, extent(poly), snap = "out")
+  # mask the raster by mcp 
+  lr <- mask(x = cr, mask = poly)
+  return(lr)
+}
+
+
+##### withold #####
+# withold data
+withold <- function(x, cut, type) {
+  n <- nrow(x)*cut
+  
+  if (type == "train") {
+    y <- head(x, (nrow(x)-n))
+  }
+  
+  if (type == "test") {
+    y <- tail(x, n)
+  }
+  
+  return(y)
 }
