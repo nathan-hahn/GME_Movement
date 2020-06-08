@@ -2,7 +2,7 @@
 library(tidyverse)
 library(momentuHMM)
 
-source("C:/Users/nhahn/Dropbox (Personal)/R/Functions/velocity.R")
+source("./GME_functions.R")
 
 #' ---- Prep data for HMM population model fitting ----
 
@@ -29,20 +29,7 @@ used.all <- filter(used.all, burst %in% t$burst) %>% droplevels()
 split <- split(used.all, used.all$burst)
 split <- c(split[1], split[2], split[6], split[14], split[23]) #TEMP -- only use Alina and Kegol
 
-withold <- function(x, cut, type) {
-  n <- nrow(x)*cut
-  
-  if (type == "train") {
-    y <- head(x, (nrow(x)-n))
-  }
-  
-  if (type == "test") {
-    y <- tail(x, n)
-  }
-  
-  return(y)
-}
-
+# withold data
 cut = .10
 train <- lapply(split, withold, cut = cut, type = "train")
 train <- do.call("rbind", train)

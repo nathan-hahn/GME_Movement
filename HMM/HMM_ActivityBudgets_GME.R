@@ -6,28 +6,21 @@
 #' 2. Overlapping windows condensed into a single window
 
 library(tidyverse)
+theme_set(  theme_bw() + # set theme with no legend of strip text
+              theme(panel.grid.major = element_blank(),
+                    strip.background = element_blank(),
+                    panel.border = element_rect(colour = "black"),
+                    strip.text = element_text(size = 12),
+                    legend.text = element_text(size = 10),
+                    panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), axis.title=element_text(size=14), axis.text = element_text(size=12))
+)
+library(lubridate)
 library(xts)
 library(zoo)
 
-# function to return stats from roll apply
-rollstat <- function(x, na.rm = TRUE) {
-  # x     = numeric vector
-  # na.rm = boolean, whether or not to remove NA's
-  
-  m  <- mean(x, na.rm = na.rm)
-  s  <- sd(x, na.rm = na.rm)
-  hi <- m + 2*s
-  lo <- m - 2*s
-  max <- max(x) # all points within the window will be labeled 1 - signals a "raiding period" for activity budgets/plotting
-  
-  ret <- c(mean = m, stdev = s, hi.95 = hi, lo.95 = lo, ag.window = max) 
-  return(ret)
-}
-
-
 ##### Prep Data #####
-hmm.df <- readRDS("./HMM/TEST_m1_indiv_df.rds")
-output <- readRDS("./HMM/TEST_traindf_original.rds")
+hmm.df <- readRDS("./HMM/model results/TEST_m2_indiv_df.rds") # output from hmm model (no squared term)
+output <- readRDS("./HMM/model results/TEST_traindf_original.rds") # dataset prior to data transforms
 
 # add viterbi estimates to the original dataframe -- revert to non-standardized covs and steps
 output$viterbi <- hmm.df$viterbi
@@ -35,7 +28,6 @@ output$viterbi <- hmm.df$viterbi
 output$ag.used <- ifelse(output$lc.estes == 1, 1, 0)
 output$pa <- factor(output$pa, levels = c(3:1))
 output$pa.2 <- ifelse(output$pa == 1 & output$ag.used == 1, 4, output$pa)
-
 
 ###### Identify Ag Use Windows #####
 
@@ -53,6 +45,8 @@ system.time({
 
 output <- do.call("rbind", merge)
 
+write.csv(output, "./HMM/model results/agWindow_temporary_df.csv")
+
 ##### Activity Budgets #####
 
 output.plot <- mutate(output, viterbi = recode_factor(viterbi, 
@@ -64,45 +58,18 @@ output.plot <- mutate(output, viterbi = recode_factor(viterbi,
 ) 
 
 
-# fix NAs for the ag window
 t <- ifelse(is.na(output.plot$ag.window) == TRUE, 0, output.plot$ag.window)
 output.plot$ag.window <- as.factor(t)
 
 # check data before plotting -- are there enough points for a density plot?
-t <- output %>%
+t <- output.plot %>%
   group_by(burst, ag.window, viterbi) %>%
   tally()
 (t)
+
+#output.plot <- filter(output.plot, burst == "Shorty-3016.1" | burst == "ST2010-2767.1")
+
 ## Density plots v2
-theme_set(  theme_bw() + # set theme with no legend of strip text
-              theme(panel.grid.major = element_blank(),
-                    strip.background = element_blank(),
-                    panel.border = element_rect(colour = "black"),
-                    strip.text = element_text(size = 12),
-                    legend.text = element_text(size = 10),
-                    panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), axis.title=element_text(size=14), axis.text = element_text(size=12))
-)
-
-
-# function for plotting activity budgets
-plot_budget <- function(t=t, facet, title){
-  ggplot(t, aes(hour(date))) +
-    facet_grid(facet) +
-    geom_density(aes(x = hour(date),
-                     fill = factor(viterbi), colour = factor(viterbi)), alpha = 0.3, adjust = 1.5) +
-  
-  # add day/night lines - code for shading below
-  geom_vline(aes(xintercept=6),
-             color="dark grey", linetype="dashed", size=1) +
-    geom_vline(aes(xintercept=18),
-               color="dark grey", linetype="dashed", size=1) +
-    
-    # add colors
-    scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("state")) +
-    scale_colour_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("state")) +
-    xlab("hour (0-23)") + ggtitle(title)
-}
-
 # budget by ag window
 agWindow <- plot_budget(t = output.plot, facet = viterbi ~ ag.window, title = "GME: Activity budget by ag window")
 agWindow

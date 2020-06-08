@@ -14,6 +14,7 @@ library(landscapemetrics, warn.conflicts = FALSE, quietly = TRUE)
 library(car, warn.conflicts = FALSE, quietly = TRUE)
 library(ggplot2, warn.conflicts = FALSE, quietly = TRUE)
 
+source("./GME_functions.R")
 
 # GME movement data - 2019
 gme <- readRDS("./GMM/GMEcollars_002_usedClust_2020-06-02.rds")
@@ -31,14 +32,6 @@ split <- split(t, t$subject_name)
 mcp <- lapply(split, mcp)
 
 ##### cut raster stack by 
-mask.poly.raster <- function(poly, raster) {
-  # crop raster to polygon extent
-  cr <- crop(raster, extent(poly), snap = "out")
-  # mask the raster by mcp 
-  lr <- mask(x = cr, mask = poly)
-  return(lr)
-}
-
 # mask landcover raster to homeranges
 system.time(
   mcp.rast <- lapply(mcp, mask.poly.raster, raster = stack$change03_181_reclassMara_2019.11.22)

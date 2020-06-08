@@ -20,59 +20,8 @@ theme_set(  theme_bw() + # set theme with no legend of strip text
                     panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), axis.title=element_text(size=14), axis.text = element_text(size=12))
 )
 
-# function to return stats from roll apply
-rollstat <- function(x, na.rm = TRUE) {
-  # x     = numeric vector
-  # na.rm = boolean, whether or not to remove NA's
-  
-  m  <- mean(x, na.rm = na.rm)
-  s  <- sd(x, na.rm = na.rm)
-  hi <- m + 2*s
-  lo <- m - 2*s
-  max <- max(x) # all points within the window will be labeled 1 - signals a "raiding period" for activity budgets/plotting
-  
-  ret <- c(mean = m, stdev = s, hi.95 = hi, lo.95 = lo, ag.window = max) 
-  return(ret)
-}
-
-# Get rollstats for a list of individuals. Supply list of individuals and windows(s) to apply
-window_stats <- function(df.list, windows){
-  require(zoo)
-  require(xts)
-  system.time({
-    # Calculate moving window stats
-    ts <- lapply(df.list, as.ts, start = df.list[[i]]$date, frequency = 1) # frequency set with 30min fixes
-    tx <- lapply(ts, as.xts)
-    res <- lapply(seq_along(tx), function(i) rollapply(tx[[i]]$ag.used, width = window, align = "center",
-                by.column = FALSE, FUN = rollstat, na.rm = FALSE))
-      res <- lapply(res, as.data.frame) # converting inline with Map() doesn't work
-    
-    # merge outputs into data frame for each individual
-    merge <- Map(cbind, df.list, res)
-    output <- do.call("rbind", merge)
-    
-    return(output)
- })
-}
-
-# function for plotting activity budgets
-plot_budget <- function(t=t, facet, title){
-  ggplot(t, aes(hour(date))) +
-    facet_grid(facet) +
-    geom_density(aes(x = hour(date),
-                     fill = factor(viterbi), colour = factor(viterbi)), alpha = 0.3, adjust = 1.5) +
-  
-  # add day/night lines - code for shading below
-  geom_vline(aes(xintercept=6),
-             color="dark grey", linetype="dashed", size=1) +
-    geom_vline(aes(xintercept=18),
-               color="dark grey", linetype="dashed", size=1) +
-    
-    # add colors
-    scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("state")) +
-    scale_colour_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("state")) +
-    xlab("hour (0-23)") + ggtitle(title)
-}
+# load functions
+source("../GME_functions.R")
 ```
 
 ### Prep Data
