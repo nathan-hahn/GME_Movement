@@ -9,6 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
+library(lubridate)
 library(xts)
 library(zoo)
 theme_set(  theme_bw() + # set theme with no legend of strip text
@@ -39,25 +40,8 @@ output$ag.used <- ifelse(output$lc.estes == 1, 1, 0)
 output$pa <- factor(output$pa, levels = c(3:1))
 output$pa.2 <- ifelse(output$pa == 1 & output$ag.used == 1, 4, output$pa)
 
-```
-
-```{r, warning=FALSE}
-###### Identify Ag Use Windows #####
-
-split <- split(output, output$burst)
-windows <- c(13,25,49) # in hours. Split to before and after when align = center
-
-t <- NULL
-for(i in 1:length(windows)){
-  t[[i]] <- window_stats(df.list = split, windows = windows[i])
-}
-
-```
-
-### Activty Budgets
-```{r}
-##### Create df for plotting #####
-output.plot <- mutate(output, viterbi = recode_factor(viterbi, 
+# format covariates for plotting
+output <- mutate(output, viterbi = recode_factor(viterbi, 
                                                  "1" = "encamped",
                                                  "2" = "foraging",
                                                  "3" = "transit"),
@@ -65,16 +49,25 @@ output.plot <- mutate(output, viterbi = recode_factor(viterbi,
                                       "3" = "not protected", "4" = "ag")
 ) 
 
-# fix NAs for the ag window
-t <- ifelse(is.na(output.plot$ag.window) == TRUE, 0, output.plot$ag.window)
-output.plot$ag.window <- as.factor(t)
-
-# check data before plotting -- are there enough points for a density plot?
-t <- output.plot %>%
-  group_by(burst, ag.window, viterbi) %>%
-  tally()
-(t)
 ```
+
+```{r, warning=FALSE}
+###### Identify Ag Use Windows #####
+
+split <- split(output, output$burst)
+window <- c(13,25,49, 73) # in hours. Split to before and after when align = center
+
+output.plot <- NULL
+for(i in 1:length(window)){
+  output.plot[[i]] <- window_stats(df.list = split, window = window[[i]])
+  # NAs to 0's
+  output.plot[[i]]$ag.window <- ifelse(is.na(output.plot[[i]]$ag.window) == TRUE, 
+                                       0, output.plot[[i]]$ag.window)
+}
+
+```
+
+### Activty Budgets
 
 The three plots below show comparisons of activity budgets of 5 elephants when they are in non-ag (0) and in an ag matrix (1). The window sizes are incrementally increased to inspect the sensitivity of the activity budgets to the choice of window size. They appear highly sensitive, where larger windows smooth over differences. This is likely due to elephants quickly returning to normal activity when not raiding. 
 
@@ -84,16 +77,20 @@ A fourth graph is included of activity by land-use type for comparison. The diff
 ##### Activity Budgets #####
 
 # budgets by ag window
-x.12 <- plot_budget(t = output.plot, facet = viterbi ~ ag.window, title = "GME: Activity budget with 12 hour window")
-agWindow
+x.12 <- plot_budget(t = output.plot[[1]], facet = viterbi ~ ag.window, title = "GME: Activity budget with 12 hour window")
+x.12
 
-x.24 <- plot_budget(t = output.plot, facet = viterbi ~ ag.window, title = "GME: Activity budget with 24 hour window")
-agWindow
+x.24 <- plot_budget(t = output.plot[[2]], facet = viterbi ~ ag.window, title = "GME: Activity budget with 24 hour window")
+x.24
 
-x.48 <- plot_budget(t = output.plot, facet = viterbi ~ ag.window, title = "GME: Activity budget with 48 hour window")
-agWindow
+x.48 <- plot_budget(t = output.plot[[3]], facet = viterbi ~ ag.window, title = "GME: Activity budget with 48 hour window")
+x.48
+
+x.72 <- plot_budget(t = output.plot[[4]], facet = viterbi ~ ag.window, title = "GME: Activity budget with 72 hour window")
+x.72
 
 # budget by land use
-landUse <- plot_budget(t = output.plot, facet = viterbi ~ pa.2, title = "GME: Activity budget by land use type")
-landUse
+# landUse <- plot_budget(t = output.plot[[1]], facet = viterbi ~ pa.2, title = "GME: Activity budget by land use type")
+# landUse
 ```
+
