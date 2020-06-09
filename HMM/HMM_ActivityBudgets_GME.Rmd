@@ -59,10 +59,10 @@ window <- c(13,25,49, 73) # in hours. Split to before and after when align = cen
 
 output.plot <- NULL
 for(i in 1:length(window)){
+  # calculate moving window stats - see rollstats function
   output.plot[[i]] <- window_stats(df.list = split, window = window[[i]])
-  # NAs to 0's
-  output.plot[[i]]$ag.window <- ifelse(is.na(output.plot[[i]]$ag.window) == TRUE, 
-                                       0, output.plot[[i]]$ag.window)
+  # remove NAs from ag windows - created by window cutoff
+  output.plot[[i]] <- filter(output.plot[[i]], is.na(ag.window) == FALSE) %>% droplevels()
 }
 
 ```
@@ -92,5 +92,35 @@ x.72
 # budget by land use
 # landUse <- plot_budget(t = output.plot[[1]], facet = viterbi ~ pa.2, title = "GME: Activity budget by land use type")
 # landUse
+```
+
+### Overlap test
+
+Initial overlap test compares the distributions in and outside of the ag matrix, across the three activity states.
+
+A von Mises PDF is constructed because the activity distribution is circular (24 hour time). 
+
+Overlap test uses bootstrapping to construct confidence intervals and test for significant differences between the two distributions. 
+
+
+```{r}
+library(overlap)
+overlap <- output
+# convert time to radians
+alerts$time <- alerts$time/1440
+timeRad <- alerts$time * 2 * pi
+
+# seperate data into buckets for testing
+
+
+# overlap tests
+
+
+
+# Bootstraping
+
+
+# CI
+
 ```
 
