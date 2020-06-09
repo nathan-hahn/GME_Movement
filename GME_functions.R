@@ -43,6 +43,8 @@ window_stats <- function(df.list, window){
 ##### plot_budget #####
 # function for plotting activity budgets
 plot_budget <- function(t=t, facet, title){
+  require(tidyverse)
+  require(lubridate)
   ggplot(t, aes(hour(date))) +
     facet_grid(facet) +
     geom_density(aes(x = hour(date),
@@ -67,7 +69,6 @@ velocity <- function(df, dateTime) {
   tdiff <- diff(dateTime)
   units(tdiff) <- "hours"
   tdiff <- as.numeric(tdiff)
-  require(rlist)
   tdiff <- list.append(tdiff, 0) # add speed zero for last fix
   
   # step lengths
@@ -89,7 +90,6 @@ log_velocity <- function(df) {
   tdiff <- diff(df$date)
   units(tdiff) <- "hours"
   tdiff <- as.numeric(tdiff)
-  require(rlist)
   tdiff <- list.append(tdiff, 0) # add speed zero for last fix
   
   # step lengths
