@@ -5,23 +5,23 @@
 ##### rollstat #####
 # function to return stats from roll apply. 
 # Used inside window_stats
-rollstat <- function(x, na.rm = TRUE) {
+rollstat <- function(x, nas = TRUE) {
   # x     = numeric vector
   # na.rm = boolean, whether or not to remove NA's
   
-  m  <- mean(x, na.rm = na.rm)
-  s  <- sd(x, na.rm = na.rm)
+  m  <- mean(x, na.rm = nas)
+  s  <- sd(x, na.rm = nas)
   hi <- m + 2*s
   lo <- m - 2*s
-  max <- max(x) # all points within the window will be labeled 1 - signals a "raiding period" for activity budgets/plotting
+  ag.window <- max(x) # all points within the window will be labeled 1 - signals a "raiding period" for activity budgets/plotting
   
-  ret <- c(mean = m, stdev = s, hi.95 = hi, lo.95 = lo, ag.window = max) 
+  ret <- c(mean = m, stdev = s, hi.95 = hi, lo.95 = lo, ag.window = ag.window) 
   return(ret)
 }
 
 ##### window_stats #####
 # Get rollstats for a list of individuals. Supply list of individuals and windows(s) to apply
-window_stats <- function(df.list, windows){
+window_stats <- function(df.list, window){
   require(zoo)
   require(xts)
   system.time({
@@ -29,7 +29,7 @@ window_stats <- function(df.list, windows){
     ts <- lapply(df.list, as.ts, start = df.list[[i]]$date, frequency = 1) # frequency set with 30min fixes
     tx <- lapply(ts, as.xts)
     res <- lapply(seq_along(tx), function(i) rollapply(tx[[i]]$ag.used, width = window, align = "center",
-                                                       by.column = FALSE, FUN = rollstat, na.rm = FALSE))
+                                                       by.column = FALSE, FUN = rollstat))
     res <- lapply(res, as.data.frame) # converting inline with Map() doesn't work
     
     # merge outputs into data frame for each individual
