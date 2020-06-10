@@ -105,17 +105,25 @@ Overlap test uses bootstrapping to construct confidence intervals and test for s
 
 ```{r}
 library(overlap)
-overlap <- output
-# convert time to radians
-alerts$time <- alerts$time/1440
-timeRad <- alerts$time * 2 * pi
+overlap <- output.plot[[2]] # 24 hour window
+## convert time to radians
+
+# convert time to minutes elapsed in the day (circular time distribution) - divide by 1440 to put time on 0-1 scale
+day.minutes <- ((hour(overlap$date) + minute(overlap$date)/60)*60)/1440
+timeRad <- day.minutes * 2 * pi
 
 # seperate data into buckets for testing
-
+encamped.0 <- timeRad[which(overlap$viterbi == "encamped" | overlap$ag.window == 0)]
+encamped.1 <- timeRad[which(overlap$viterbi == "encamped" | overlap$ag.window == 1)]
+forage.0 <- timeRad[which(overlap$viterbi == "foraging" | overlap$ag.window == 0)]
+forage.1 <- timeRad[which(overlap$viterbi == "foraging" | overlap$ag.window == 1)]
+transit.0 <- timeRad[which(overlap$viterbi == "transit" | overlap$ag.window == 0)]
+transit.1 <- timeRad[which(overlap$viterbi == "transit" | overlap$ag.window == 1)]
 
 # overlap tests
-
-
+encamped_est <- overlapEst(encamped.0, encamped.1)
+forage_est <- overlapEst(forage.0, forage.1, type="Dhat1")
+transit_est <- overlapEst(transit.0, transit.1, type ="Dhat1")
 
 # Bootstraping
 
