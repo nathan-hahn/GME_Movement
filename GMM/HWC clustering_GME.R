@@ -108,6 +108,10 @@ plot(m3, what = "classification",
      xlab = "mean ag occupancy",
      ylab = "max monthly ag occupancy")
 
+
+m3.3 <- Mclust(both.df, G = 3)
+
+
 ####Results####
 
 # select top based on BIC values and biological realism (m1 and m2)
@@ -117,50 +121,116 @@ plot(m3, what = "BIC")
 
 # add classification to results
 ag.class.mean <- as.factor(m1$classification)
-ag.class.both <- as.factor(m3$classification)
-ag.class.both <- factor(ag.class.both, levels(ag.class.both)[c(1,4,3,2)], labels = c(1,2,3,4)) # FOR GME 002 ONLY
+ag.class.both.3 <- as.factor(m3.3$classification)
+ag.class.both.3 <- factor(ag.class.both.3, levels(ag.class.both.3)[c(1,3,2)], labels = c(1,2,3)) # FOR GME 002 ONLY
+ag.class.both.4 <- as.factor(m3$classification)
+ag.class.both.4 <- factor(ag.class.both.4, levels(ag.class.both.4)[c(1,4,3,2)], labels = c(1,2,3,4)) # FOR GME 002 ONLY
 #ag.class.both <- factor(ag.class.both, levels(ag.class.both)[c(1,2,4,3)], labels = c(1,2,3,4)) # FOR GME  001 ONLY
 #ag.class.both <- factor(ag.class.both,levels(ag.class.both)[c(1,4,2,3)], labels = c(1,2,3,4)) #FOR MEP ONLY
 
 result$ag.class.mean <- ag.class.mean
-result$ag.class.both <- ag.class.both
+result$ag.class.both.3 <- ag.class.both.3
+result$ag.class.both.4 <- ag.class.both.4
 
 # Summarize by individual
 clust.result <- result %>%
   dplyr::select(-c(n.ag, n)) %>%
-  dplyr::select(-month, -max.occupancy) 
+  dplyr::select(-month, max.occupancy) 
 (clust.result)
 
+##### Model validation/inspecition #####
+
+### bootstrap - m3 vs m1
+
+boot.m3 <- MclustBootstrap(m3, type = "bs")
+summary(boot.m3, what = "ci")
+par(mfrow=c(4,3))
+plot(boot.m3, what = "mean")
+
+boot.m1 <- MclustBootstrap(m1, type = "bs")
+summary(boot.m1, what = "ci")
+
+### crossvalidation - m3 with 3 vs 4 groups
+
+both.df <- cbind(clust.result$mean.occupancy*100, clust.result$max.occupancy*100)
+class <- clust.result$ag.class.both
+m3.da <- MclustDA(both.df, class, modelType = 'EDDA') # fit VVV model to the 4 groups
+m3.cv <- cvMclustDA(m3.da, nfold = 5, verbose = FALSE) # cross validate 
+m3.cv$error
+
+# G = 3
+trainData <- cbind(clust.result$mean.occupancy*100, clust.result$max.occupancy*100)
+trainClass <- clust.result$ag.class.both.3
+
+models <- mclust.options()$emModelNames
+tab <- matrix(NA, nrow = length(models), ncol = 4)
+rownames(tab) <- models
+colnames(tab) <- c("model","BIC", "CV_err", "G")
+for(i in seq(models)) {
+  tab[i,1] <- models[i]
+  mod <- MclustDA(trainData, trainClass,
+                  modelType = "EDDA", modelNames = models[i])
+  tab[i,2] <- mod$bic
+  tab[i,3] <- cvMclustDA(mod, nfold = 5, verbose = FALSE)$error
+  tab[i,4] <- "3"
+}
+tab.3 <- as.data.frame(tab)
+
+# G = 4
+trainData <- cbind(clust.result$mean.occupancy*100, clust.result$max.occupancy*100)
+trainClass <- clust.result$ag.class.both.4
+
+models <- mclust.options()$emModelNames
+tab <- matrix(NA, nrow = length(models), ncol = 4)
+rownames(tab) <- models
+colnames(tab) <- c("model","BIC", "CV_err", "G")
+for(i in seq(models)) {
+  tab[i,1] <- models[i]
+  mod <- MclustDA(trainData, trainClass,
+                  modelType = "EDDA", modelNames = models[i])
+  tab[i,2] <- mod$bic
+  tab[i,3] <- cvMclustDA(mod, nfold = 5, verbose = FALSE)$error
+  tab[i,4] <- "4"
+}
+tab.4 <- as.data.frame(tab)
+
+# create single table and filter to 5 largest BIC values
+tab.cv <- rbind(tab.3, tab.4) %>%
+  mutate(BIC = as.numeric(as.character(BIC)), CV_err = as.numeric(as.character(CV_err))) %>%
+  top_n(n = 5, BIC) %>% arrange(desc(BIC))
+tab.cv
+  
+##### Summary Outputs #####
 # Summarize by class
 clust.summary <- result %>%
-  group_by(ag.class.both) %>%
+  group_by(ag.class.both.4) %>%
   summarise(n = length(ag.class.mean),
             mean = mean(mean.occupancy),
             sd = sd(mean.occupancy),
             se = sd/sqrt(n),
-            lower = mean - se,
-            upper = mean + se)
+            lower = mean - sd,
+            upper = mean + sd)
 (clust.summary)
 
 clust.df <- result %>%
-  dplyr::select(subject_name, ag.class.both) %>%
+  dplyr::select(subject_name, ag.class.both.4) %>%
   inner_join(.,df, by = "subject_name") %>%
   dplyr::select(-month) %>%
   as.data.frame()
 
 
-ggplot(clust.summary) + geom_bar(aes(x = ag.class.both, y = mean), stat = "identity") + 
-  geom_errorbar(aes(x = ag.class.both, ymin = lower, ymax = upper), width = .2) + ylab("mean ag occupancy") + xlab("ag usage cluster")
+ggplot(clust.summary) + geom_bar(aes(x = ag.class.both.4, y = mean), stat = "identity") + 
+  geom_errorbar(aes(x = ag.class.both.4, ymin = lower, ymax = upper), width = .2) + ylab("mean ag occupancy") + xlab("ag usage cluster")
 
 
-####Export####
+##### Export #####
 # new used df with cluster classification. 
 # has ag.class.mean and ag.class.both classifications included
 {outfile <- paste0("./GMM/GMEcollars_002_usedClust_", Sys.Date(), ".rds")
 saveRDS(clust.df, outfile)}
 
 {outfile <- paste0("./GMM/GMEcollars_002_usedClust_", Sys.Date(), ".csv")
-write.csv(clust.df, outfile)}
+  write.csv(clust.df, outfile)}
 
 # cluster results
 {outfile <- paste0("./GMM/clustResult_GME_", Sys.Date(), ".csv")
@@ -172,11 +242,5 @@ write.csv(clust.df, outfile)}
 
 {outfile <- paste0("./GMM/GMEcollars_002_clustSummary_", Sys.Date(), ".csv")
   write.csv(clust.summary, outfile)}
-
-
-
-
-
-
 
 
