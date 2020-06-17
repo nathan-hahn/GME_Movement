@@ -89,7 +89,7 @@ result$month.occupancy <- NULL
 # fit model with mean ag occupancy
 m1 <- Mclust(result$mean.occupancy, G = 3)
 plot(m1, what = "classification",
-     xlab = "mean ag occupancy (*100)",
+     xlab = "mean ag occupancy",
      ylab = "cluster")
 
 # fit model with max monthly ag occupancy
@@ -97,12 +97,12 @@ plot(m1, what = "classification",
 m2 <- Mclust(result$max.occupancy)
 summary(m2, classification = TRUE)
 plot(m2, what = "classification",
-     xlab = "max monthly ag occupancy (*100)",
+     xlab = "max monthly ag occupancy",
      ylab = "cluster")
 
 # fit model with mean and max occupancy data (2D)
 # produces 9 clusters
-both.df <- cbind(result$mean.occupancy*100, result$max.occupancy*100)
+both.df <- cbind(result$mean.occupancy, result$max.occupancy)
 m3 <- Mclust(both.df)
 plot(m3, what = "classification",
      xlab = "mean ag occupancy",
@@ -110,6 +110,13 @@ plot(m3, what = "classification",
 
 
 m3.3 <- Mclust(both.df, G = 3)
+
+
+both.df <- cbind(result$mean.occupancy, roll.max$roll.max)
+m4 <- Mclust(both.df)
+plot(m4, what = "classification",
+     xlab = "mean ag occupancy",
+     ylab = "roll.max ag occupancy")
 
 
 ####Results####
@@ -125,17 +132,19 @@ ag.class.both.3 <- as.factor(m3.3$classification)
 ag.class.both.3 <- factor(ag.class.both.3, levels(ag.class.both.3)[c(1,3,2)], labels = c(1,2,3)) # FOR GME 002 ONLY
 ag.class.both.4 <- as.factor(m3$classification)
 ag.class.both.4 <- factor(ag.class.both.4, levels(ag.class.both.4)[c(1,4,3,2)], labels = c(1,2,3,4)) # FOR GME 002 ONLY
+ag.class.roll <- as.factor(m4$classification)
+ag.class.roll <- factor(ag.class.roll, levels(ag.class.roll)[c(1,3,4,2)], labels = c(1,2,3,4))
 #ag.class.both <- factor(ag.class.both, levels(ag.class.both)[c(1,2,4,3)], labels = c(1,2,3,4)) # FOR GME  001 ONLY
 #ag.class.both <- factor(ag.class.both,levels(ag.class.both)[c(1,4,2,3)], labels = c(1,2,3,4)) #FOR MEP ONLY
 
 result$ag.class.mean <- ag.class.mean
 result$ag.class.both.3 <- ag.class.both.3
 result$ag.class.both.4 <- ag.class.both.4
+result$ag.class.roll <- ag.class.roll
 
 # Summarize by individual
 clust.result <- result %>%
-  dplyr::select(-c(n.ag, n)) %>%
-  dplyr::select(-month, max.occupancy) 
+  dplyr::select(-c(n.ag, n, month)) 
 (clust.result)
 
 ##### Model validation/inspecition #####
@@ -152,59 +161,85 @@ summary(boot.m1, what = "ci")
 
 ### crossvalidation - m3 with 3 vs 4 groups
 
-both.df <- cbind(clust.result$mean.occupancy*100, clust.result$max.occupancy*100)
-class <- clust.result$ag.class.both
-m3.da <- MclustDA(both.df, class, modelType = 'EDDA') # fit VVV model to the 4 groups
-m3.cv <- cvMclustDA(m3.da, nfold = 5, verbose = FALSE) # cross validate 
-m3.cv$error
-
 # G = 3
-trainData <- cbind(clust.result$mean.occupancy*100, clust.result$max.occupancy*100)
+trainData <- cbind(clust.result$mean.occupancy, clust.result$max.occupancy)
 trainClass <- clust.result$ag.class.both.3
 
 models <- mclust.options()$emModelNames
-tab <- matrix(NA, nrow = length(models), ncol = 4)
+tab <- matrix(NA, nrow = length(models), ncol = 5)
 rownames(tab) <- models
-colnames(tab) <- c("model","BIC", "CV_err", "G")
+colnames(tab) <- c("model","BIC", "CV_err", "se", "G")
 for(i in seq(models)) {
   tab[i,1] <- models[i]
   mod <- MclustDA(trainData, trainClass,
                   modelType = "EDDA", modelNames = models[i])
   tab[i,2] <- mod$bic
-  tab[i,3] <- cvMclustDA(mod, nfold = 5, verbose = FALSE)$error
-  tab[i,4] <- "3"
+  t <- cvMclustDA(mod, nfold = 10, verbose = FALSE)
+  tab[i,3] <- t$error
+  tab[i,4] <- t$se
+  tab[i,5] <- "3"
 }
 tab.3 <- as.data.frame(tab)
 
 # G = 4
-trainData <- cbind(clust.result$mean.occupancy*100, clust.result$max.occupancy*100)
+trainData <- cbind(clust.result$mean.occupancy, clust.result$max.occupancy)
 trainClass <- clust.result$ag.class.both.4
 
 models <- mclust.options()$emModelNames
-tab <- matrix(NA, nrow = length(models), ncol = 4)
+tab <- matrix(NA, nrow = length(models), ncol = 5)
 rownames(tab) <- models
-colnames(tab) <- c("model","BIC", "CV_err", "G")
+colnames(tab) <- c("model","BIC", "CV_err", "se", "G")
 for(i in seq(models)) {
   tab[i,1] <- models[i]
   mod <- MclustDA(trainData, trainClass,
                   modelType = "EDDA", modelNames = models[i])
   tab[i,2] <- mod$bic
-  tab[i,3] <- cvMclustDA(mod, nfold = 5, verbose = FALSE)$error
-  tab[i,4] <- "4"
+  t <- cvMclustDA(mod, nfold = 10, verbose = FALSE)
+  tab[i,3] <- t$error
+  tab[i,4] <- t$se
+  tab[i,5] <- "4"
 }
 tab.4 <- as.data.frame(tab)
 
+# roll, G = 4
+trainData <- cbind(clust.result$mean.occupancy, clust.result$roll.max)
+trainClass <- clust.result$ag.class.roll
+
+models <- mclust.options()$emModelNames
+tab <- matrix(NA, nrow = length(models), ncol = 5)
+rownames(tab) <- models
+colnames(tab) <- c("model","BIC", "CV_err", "se", "G")
+for(i in seq(models)) {
+  tab[i,1] <- models[i]
+  mod <- MclustDA(trainData, trainClass,
+                  modelType = "EDDA", modelNames = models[i])
+  tab[i,2] <- mod$bic
+  t <- cvMclustDA(mod, nfold = 10, verbose = FALSE)
+  tab[i,3] <- t$error
+  tab[i,4] <- t$se
+  tab[i,5] <- "roll.4"
+}
+tab.roll <- as.data.frame(tab)
+
 # create single table and filter to 5 largest BIC values
-tab.cv <- rbind(tab.3, tab.4) %>%
+tab.cv <- rbind(tab.3, tab.4, tab.roll) %>%
   mutate(BIC = as.numeric(as.character(BIC)), CV_err = as.numeric(as.character(CV_err))) %>%
   top_n(n = 5, BIC) %>% arrange(desc(BIC))
 tab.cv
-  
+
+
+##### Fit Top Model to Data #####
+cov.df <- cbind(clust.result$mean.occupancy, clust.result$max.occupancy)
+mSelect <- Mclust(data = cov.df, modelNames = 'VVV', G = 4)
+plot(mSelect,  what = "classification",
+     xlab = "mean ag occupancy",
+     ylab = "max monthly ag occupancy")
+
 ##### Summary Outputs #####
 # Summarize by class
 clust.summary <- result %>%
   group_by(ag.class.both.4) %>%
-  summarise(n = length(ag.class.mean),
+  summarise(n = length(ag.class.both.4),
             mean = mean(mean.occupancy),
             sd = sd(mean.occupancy),
             se = sd/sqrt(n),
