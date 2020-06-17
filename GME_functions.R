@@ -49,7 +49,6 @@ plot_budget <- function(t=t, facet, title){
     facet_grid(facet) +
     geom_density(aes(x = hour(date),
                      fill = factor(viterbi), colour = factor(viterbi)), alpha = 0.3, adjust = 1.5) +
-    
     # add day/night lines - code for shading below
     geom_vline(aes(xintercept=6),
                color="dark grey", linetype="dashed", size=1) +
