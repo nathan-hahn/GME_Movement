@@ -8,9 +8,9 @@ library(tidyverse)
 
 ##### LOAD DATA #####
 mep <- readRDS("./movdata/MEPcollars_20200516_clean_2020-05-21.rds")
-metaMEP <- read.csv("./movdata/MEPcollars_20200516_metadata.csv")
+metaMEP <- read.csv("./movdata/MEPcollars_20205016_metadata.csv")
 metaMEP$X <- NULL
-gr <- readRDS("./movdata/GRcollars_20191231_clean_2020-05-21.rds")
+gr <- readRDS("./movdata/GRcollars_20191231_clean_2020-06-20.rds")
 metaGR <- read.csv("./movdata/GRCollars_211119_metadata.csv")
 
 
