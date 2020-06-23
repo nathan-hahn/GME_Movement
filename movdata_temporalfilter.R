@@ -6,7 +6,7 @@ movdat$subject_name <- ifelse(is.na(movdat$subject_name), movdat$collar_id, movd
 gr <- movdat %>%
   filter(site == "gr") %>%
   filter(!(subject_name %in% c("Nyanza"))) %>%
-  # filter(minute(date) <= 10 | minute(date) >= 50) %>%
+  filter(minute(date) <= 10 | minute(date) >= 50) %>%
   droplevels()
 
 mep <- movdat %>%
@@ -16,14 +16,13 @@ mep <- movdat %>%
                                "Rudisha", "Naeku", "Olkeri", "ST2010-1441"))) 
 
 
-movdat.filter <- rbind(gr, mep) %>%
-  filter(minute(date) <= 10 | minute(date) >= 50)
+downsampled <- rbind(gr, mep) 
 
-fixes <- movdat.filter %>%
+fixes <- bind %>%
   group_by(subject_name) %>%
   tally() %>%
   filter(n >= 120*24)
 
-movdat.filter <- filter(movdat.filter, subject_name %in% fixes$subject_name)
+movdat.filter <- filter(downsampled, subject_name %in% fixes$subject_name)
 
 saveRDS(movdat.filter, "./movdata/GMEcollars_002_usedFilter_2020-06-20.rds")
