@@ -24,51 +24,32 @@ movdat <- movdat[-which(movdat$subject_name%in%c("Nyanza")),]
 movdat$subject_name <- ifelse(is.na(movdat$subject_name), movdat$collar_id, movdat$subject_name)
 movdat <-subset(movdat, minute(movdat$date) <= 10 | minute(movdat$date) >= 50)
 
+
+
 # dataframe for fitting
-df <- movdat
-# df <- movdat %>%
-#   filter(site == "mep")
+df <- movdat %>%
+  mutate(ag.used = if_else(lc.estes == 1, 1, 0),
+         month = month(date))
 
 ####Mean occupancy####
-fixes <- df %>%
-  group_by(subject_name) %>%
-  tally()
-
 ag.mean <- df %>%
   group_by(subject_name) %>%
-  tally(lc.estes == 1) %>%
-  droplevels() %>%
-  ungroup() %>%
-  mutate(mean.ag = n/fixes$n*100)
+  summarise(n = n(),
+            mean.ag = mean(ag.used))
 
 (ag.mean)
 
 ####Occupancy by Month####
-# get total number of fixes for each month - summed across all fixes for each individual
-# get number of fixes within ag for each month
-# bind with total fixes per month
 # calculate occupancy by month
-
-df$month <- format(df$date, "%m")
-fixes.m <- df %>%
-  group_by(site, subject_name, month) %>%
-  tally() 
-
 ag.month <- df %>%
   group_by(site, subject_name, month) %>%
-  tally(lc.estes == 1) %>% # tally fixes in ag
-  droplevels() %>%
-  ungroup() %>%
-  rename(n.ag = n) %>%
-  mutate(month = as.factor(month)) %>%
-  mutate(n = fixes.m$n) %>%
-  arrange(subject_name, month) %>%
-  mutate(month.occupancy = n.ag/n)
-
+  summarise(n.month = n(),
+            month.occupancy = mean(ag.used))
+  
 (ag.month) # the month for each individual where ag occupancy is highest (across all)
 
 # bar plot of ag occupancy by month
-p <- ggplot(ag.month, aes(month, month.occupancy)) + geom_bar(stat = "identity") + facet_wrap(.~name) + 
+p <- ggplot(ag.month, aes(month, month.occupancy)) + geom_bar(stat = "identity") + facet_wrap(.~subject_name) + 
   scale_x_discrete(name ="month", breaks=c(3,6,9))
 p
 
@@ -80,14 +61,14 @@ result <- ag.month %>%
   ungroup() %>%
   mutate(
     max.occupancy = round(month.occupancy, 5), 
-    mean.occupancy = round(ag.mean$mean.ag/100, 5), 
+    mean.occupancy = round(ag.mean$mean.ag, 5), 
     month = as.numeric(month))
 result$month.occupancy <- NULL
 (result)
 ####Model Fitting####
 
 # fit model with mean ag occupancy
-m1 <- Mclust(result$mean.occupancy, G = 3)
+m1 <- Mclust(result$mean.occupancy)
 plot(m1, what = "classification",
      xlab = "mean ag occupancy",
      ylab = "cluster")
@@ -113,7 +94,7 @@ m3.3 <- Mclust(both.df, G = 3)
 
 
 both.df <- cbind(result$mean.occupancy, roll.max$roll.max)
-m4 <- Mclust(both.df)
+m4 <- Mclust(both.df, G = 4)
 plot(m4, what = "classification",
      xlab = "mean ag occupancy",
      ylab = "roll.max ag occupancy")
@@ -131,7 +112,7 @@ ag.class.mean <- as.factor(m1$classification)
 ag.class.both.3 <- as.factor(m3.3$classification)
 ag.class.both.3 <- factor(ag.class.both.3, levels(ag.class.both.3)[c(1,3,2)], labels = c(1,2,3)) # FOR GME 002 ONLY
 ag.class.both.4 <- as.factor(m3$classification)
-ag.class.both.4 <- factor(ag.class.both.4, levels(ag.class.both.4)[c(1,4,3,2)], labels = c(1,2,3,4)) # FOR GME 002 ONLY
+ag.class.both.4 <- factor(ag.class.both.4, levels(ag.class.both.4)[c(1,3,2,4)], labels = c(1,2,3,4)) # FOR GME 002 ONLY
 ag.class.roll <- as.factor(m4$classification)
 ag.class.roll <- factor(ag.class.roll, levels(ag.class.roll)[c(1,3,4,2)], labels = c(1,2,3,4))
 #ag.class.both <- factor(ag.class.both, levels(ag.class.both)[c(1,2,4,3)], labels = c(1,2,3,4)) # FOR GME  001 ONLY
