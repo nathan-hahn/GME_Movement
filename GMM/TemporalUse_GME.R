@@ -2,12 +2,9 @@
 library(tidyverse)
 source("GME_functions.R")
 
+##### Data Prep #####
 movdat <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-06-20.rds')
 movdat$ag.used <- ifelse(movdat$lc.estes == 1, 1, 0) 
-movdat <- movdat[-which(movdat$subject_name%in%c("Tunai","Bettye","Nancy", "Wilbur", 
-                                                 "Julia", "Ndorre", "Nkoidila", "Santiyan", "Earhart",
-                                                 "Rudisha", "Naeku", "Olkeri", "ST2010-1441")),]
-movdat <- movdat[-which(movdat$subject_name%in%c("Nyanza")),]
 
 ##### Rolling Stats #####
 split <- split(movdat, movdat$subject_name)
@@ -36,17 +33,4 @@ p90 <- ggplot(res.90, aes(x = date, color = subject_name)) + #, color = name
 
 p90
 
-
-
-
-roll.max <- output.plot[[4]] %>%
-  filter(subject_name %in% result$subject_name) %>%
-  group_by(subject_name) %>%
-  summarise(roll.max = max(mean)) 
-
-
-
-roll.max.year <- roll.max %>%
-  group_by(subject_name) %>%
-  summarise(roll.mean = mean(roll.max))
 
