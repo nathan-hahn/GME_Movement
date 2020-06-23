@@ -6,22 +6,18 @@ theme_set(theme_bw() + theme(panel.border = element_rect(), panel.grid.major = e
 library(mclust)
 library(lubridate)
 library(dplyr)
-
 source("GME_functions.R")
 
-####Prep Data####
-# Filter to individuals that meet temporal and spatial criteria
-
-# movdat <- readRDS('./movdata/GMEcollars_002_used_2020-06-02.rds')
-# movdat$subject_name <- ifelse(is.na(movdat$subject_name), movdat$collar_id, movdat$subject_name)
+#### Prep Data ####
+# Load filtered data for individuals that meet temporal and spatial criteria for clustering
+movdat.filter <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-06-20.rds')
 
 # dataframe for fitting
 df <- movdat.filter %>%
   mutate(ag.used = if_else(lc.estes == 1, 1, 0),
-         month = month(date)) #%>%
-  #filter(minute(date) <= 10 | minute(date) >= 50)
+         month = month(date)) 
 
-#### Mean occupancy ####
+##### Mean occupancy #####
 ag.mean <- df %>%
   group_by(subject_name) %>%
   summarise(n = n(),
@@ -29,7 +25,7 @@ ag.mean <- df %>%
 
 (ag.mean)
 
-#### Occupancy by Month ####
+##### Occupancy by Month #####
 # calculate occupancy by month
 ag.month <- df %>%
   group_by(site, subject_name, month) %>%
@@ -37,13 +33,12 @@ ag.month <- df %>%
             month.occupancy = mean(ag.used)) 
 
 # max monthly occupancy
-
 max <- ag.month %>%
   group_by(subject_name) %>%
   slice(which.max(month.occupancy)) %>%
   ungroup() %>%
-  mutate(max.occupancy = round(month.occupancy, 5)) %>% dplyr::select(-month.occupancy) #%>%
-  #filter(n.month >= 5*24)
+  mutate(max.occupancy = round(month.occupancy, 5)) %>% dplyr::select(-month.occupancy) %>%
+  filter(n.month >= 5*24)
 
 # bar plot of ag occupancy by month
 p <- ggplot(ag.month, aes(month, month.occupancy)) + geom_bar(stat = "identity") + facet_wrap(.~subject_name) + 
@@ -61,8 +56,8 @@ roll.filter <- movdat.filter %>%
 roll.df <- filter(df, subject_name %in% roll.filter$subject_name)
 split <- split(roll.df, roll.df$subject_name)
 
-# window sizes
-window <- c(30*24, 90*24) # in hours. Split to before and after when align = center
+# assign window sizes (centered)
+window <- c(7*24, 30*24, 90*24) # days*hrs
 
 roll.output <- NULL
 for(i in 1:length(window)){
@@ -171,10 +166,10 @@ plot(boot.m3, what = "mean")
 boot.m1 <- MclustBootstrap(m1, type = "bs")
 summary(boot.m1, what = "ci")
 
-### crossvalidation - m3 with 3 vs 4 groups
+### crossvalidation - Mean Ag, Mean=Max, Mean=Roll.Max
 
-# G = 3
-trainData <- cbind(clust.result$mean.ag, clust.result$max.occupancy)
+# Mean Ag, G = 4
+trainData <- cbind(clust.result$mean.ag)
 trainClass <- clust.result$ag.class.both.3
 
 models <- mclust.options()$emModelNames
