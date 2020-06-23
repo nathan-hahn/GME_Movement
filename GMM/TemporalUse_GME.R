@@ -2,13 +2,16 @@
 library(tidyverse)
 source("GME_functions.R")
 
-movdat <- readRDS('./GMM/movdata/GMEcollars_002_usedClust_2020-06-05.rds')
+movdat <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-06-20.rds')
 movdat$ag.used <- ifelse(movdat$lc.estes == 1, 1, 0) 
-
-movdat <- filter(movdat, subject_name %in% c('Ivy', 'Kegol', 'Lowana', 'Olchoda', 'Jacinta')) %>% droplevels()
+movdat <- movdat[-which(movdat$subject_name%in%c("Tunai","Bettye","Nancy", "Wilbur", 
+                                                 "Julia", "Ndorre", "Nkoidila", "Santiyan", "Earhart",
+                                                 "Rudisha", "Naeku", "Olkeri", "ST2010-1441")),]
+movdat <- movdat[-which(movdat$subject_name%in%c("Nyanza")),]
 
 ##### Rolling Stats #####
 split <- split(movdat, movdat$subject_name)
+
 window <- c(1*24, 7*24, 30*24, 90*24) # in hours. Split to before and after when align = center
 
 output.plot <- NULL
@@ -20,7 +23,7 @@ for(i in 1:length(window)){
 }
 
 ##### Visualize #####
-res.90 <- output.plot[[4]] 
+res.90 <- output.plot[[3]] 
 res.90$ag.used <- ifelse(res.90$ag.used == 1, 0.75, NA) # adjust ag.used values for plotting for visibility
 p90 <- ggplot(res.90, aes(x = date, color = subject_name)) + #, color = name
   geom_point(aes(y = ag.used), color = "grey40", size = .2, alpha = 0.5) +
@@ -36,9 +39,12 @@ p90
 
 
 
-roll.max <- output.plot[[2]] %>%
+roll.max <- output.plot[[4]] %>%
+  filter(subject_name %in% result$subject_name) %>%
   group_by(subject_name) %>%
-  summarise(roll.max = max(mean))
+  summarise(roll.max = max(mean)) 
+
+
 
 roll.max.year <- roll.max %>%
   group_by(subject_name) %>%
