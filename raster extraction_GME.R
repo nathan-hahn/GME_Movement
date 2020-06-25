@@ -16,7 +16,7 @@ library(raster)
 ####Prep data####
 
 # load RData
-df <- readRDS("./movdata/GMEcollars_002_clean_2020-06-19.rds")
+df <- readRDS("./movdata/GMEcollars_002_clean_2020-06-25.rds")
 
 # summarize relocs by individual  
 df %>%
@@ -32,7 +32,9 @@ study.area <- '+proj=utm +init=epsg:32736'
 
 # get rasters from spatial data folder and set CRS
 dist2ag <- raster("./spatial data/dist2ag_estes_32736_2019-11-21.tif")
-dist2water <- raster("./spatial data/dist2water_estes_32736_2019-11-21.tif")
+dist2permwater <- raster("./spatial data/dist2permanent_water_20200624.tif")
+dist2seasonalwater <- raster("./spatial data/dist2seasonal_water_20200624.tif")
+dist2water <- raster("./spatial data/dist2merged_water_20200624.tif")
 slope <- raster("./spatial data/slope_estes_32736_2020-05-12.tif")
 lc <- raster("./spatial data/change03_181_reclassMara_2019-11-22.tif")
 gHM <- raster("./spatial data/gHM_estes_32736_2020-05-12.tif")
@@ -64,7 +66,7 @@ s <- stack(dist2ag, dist2water, slope, pa, lc)
 ## Extract raster covariates
 
 # create matrix for used points
-used <- matrix(1, nrow = nrow(df), ncol = 8)
+used <- matrix(1, nrow = nrow(df), ncol = 10)
 # create spatial points 
 locs <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df, 
                                proj4string = crs(study.area))
@@ -73,11 +75,13 @@ locs <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df,
 system.time({
 used[,2] <- extract(dist2ag, locs)
 used[,3] <- extract(dist2water, locs)
-used[,4] <- extract(slope, locs)
-used[,5] <- extract(gHM, locs)
-used[,6] <- extract(pa, locs)
-used[,7] <- extract(lc, locs)
-used[,8] <- extract(dist2forest, locs)
+used[,4] <- extract(dist2permwater, locs)
+used[,5] <- extract(dist2seasonalwater, locs)
+used[,6] <- extract(slope, locs)
+used[,7] <- extract(gHM, locs)
+used[,8] <- extract(pa, locs)
+used[,9] <- extract(lc, locs)
+used[,10] <- extract(dist2forest, locs)
 })
 
 # check
