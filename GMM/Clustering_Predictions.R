@@ -1,14 +1,14 @@
 ##### GMM Predict #####
 
-## Get top model
-readRDS("./GMM/results/mSelect.rds")
+## Get top model and movement data
+mSelect <- readRDS("./GMM/results/mSelect.rds")
+#movdat.filter <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-06-20.rds')
 
 ##### Create data subsets #####
 # dataframe for fitting
-df <- movdat.filter %>%
+df <- temp.filter %>%
   mutate(ag.used = if_else(lc.estes == 1, 1, 0),
-         month = month(date)) %>%
-  filter(site == "mep")
+         month = month(date)) 
 # Mean Occ.
 ag.mean <- df %>%
   group_by(subject_name) %>%
@@ -54,24 +54,28 @@ roll.max <- roll.output[[1]] %>%
 
 ##### Tabulate Occupancy Results #####
 # Join the results from each occupancy method into a single table of individuals for model fitting
-result <- full_join(max, ag.mean) %>% full_join(., roll.max)
-(result)
+t <- full_join(max, ag.mean) %>% full_join(., roll.max)
+(t)
 
 # TEST
 
 # For 1D plot
-test.df <- cbind(result$mean.ag)
+test.df <- cbind(t$mean.ag)
 test1D <- test.df[complete.cases(test.df), ]
 pred1D <- predict.Mclust(m1, test1D)
 
 # For 2D plot
-test.df <- cbind(result$mean.ag, result$roll.max)
+test.df <- cbind(t$mean.ag, t$roll.max)
 test2D <- test.df[complete.cases(test.df), ]
-pred2D <- predict.Mclust(m4, test2D)
+pred2D <- predict.Mclust(mSelect, test2D)
+
 
 hist(pred1D$classification, breaks = 5)
 mclust1Dplot(test1D, z = pred1D$z, classification = pred1D$classification)
 
 hist(pred2D$classification, breaks = 5)
 mclust2Dplot(test2D, z = pred2D$z, classification = pred2D$classification)
+
+
+mclust2Dplot(test2D, z = pred2D$z, classification = pred2D$classification, what = 'uncertainty')
 
