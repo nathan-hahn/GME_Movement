@@ -3,23 +3,26 @@
 # MEP
 # Grumeti
 
+
 library(tidyverse)
+library(lubridate)
 
 
 ##### LOAD DATA #####
 mep <- readRDS("./movdata/MEPcollars_20200516_clean_2020-05-21.rds")
 metaMEP <- read.csv("./movdata/MEPcollars_20205016_metadata.csv")
 metaMEP$X <- NULL
-gr <- readRDS("./movdata/GRcollars_20191231_clean_2020-06-20.rds")
-metaGR <- read.csv("./movdata/GRCollars_211119_metadata.csv")
+gr <- readRDS("./movdata/GRcollars_20191231_clean_2020-06-25.rds")
+metaGR <- read.csv("./movdata/GRcollars_20191231_metadata.csv")
 
 
 ##### MERGE #####
 # prep datasets
 mep <- mep %>%
-  mutate(ele.xy.TEMPERATURE = NA) %>%
+  mutate(ele.xy.TEMPERATURE = NA, subject_age = NA) %>%
   inner_join(., metaMEP, by = "id") %>%
-  mutate(site = "mep") %>%
+  mutate(site = "mep",
+         Fixtime = ymd_hms(Fixtime)) %>%
   rename(date = Fixtime) 
 mep$n <- NULL
 mep.col.names <- colnames(mep)
@@ -27,11 +30,11 @@ mep.col.names <- colnames(mep)
 
 gr <- gr %>%
   left_join(., metaGR, by = "id") %>%
-  rename(subject_name = Name, subject_sex = Sex) %>%
-  mutate(collar_id = id, 
+  rename(subject_name = Name, subject_sex = Sex, subject_age = Age) %>%
+  mutate(collar_id = as.character(id), 
     id = paste(subject_name, substr(collar_id, nchar(collar_id)-3, nchar(collar_id)), sep = "-"), 
-    region = "Serengeti", fixType = "regular", site = "gr") %>%
-  mutate(subject_sex  = ifelse(subject_sex == "F", "female", "male")) %>%
+    region = "Serengeti", fixType = "regular", site = "gr",
+    date = ymd_hms(date)) %>%
   dplyr::select(mep.col.names)
 
 
@@ -40,7 +43,7 @@ gr <- gr %>%
 
 # merge
 output <- bind_rows(mep, gr) %>%
-  filter(year(date) < 2020)
+  filter(year(date) < 2020) 
 
 
 ##### Tracking Summary #####
