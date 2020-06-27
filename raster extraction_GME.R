@@ -109,7 +109,8 @@ summary(used)
 mode(used) = "numeric"
 used2 <- as.data.frame(used)
 used2$ID <- as.character(locs@data$id)
-colnames(used2) <- c("used", "dist2ag", "dist2water", "slope", "gHM", "pa", "lc.estes", "dist2forest", "merge_id")
+colnames(used2) <- c("used", "dist2ag", "dist2water", "dist2permwater", "dist2seasonalwater", 
+                     "slope", "gHM", "pa", "lc.estes", "dist2forest", "merge_id")
 head(used2)
 
 # unstandardized data frame
@@ -160,6 +161,7 @@ used.df <- bind_cols(used.df, test)
 outfile <- paste0("./movdata/GMEcollars_002_used_", Sys.Date(), ".rds")
 saveRDS(used.df, outfile)
 
+# write to csv file
 outfile <- paste0("./movdata/GMEcollars_002_used_", Sys.Date(), ".csv")
 write.csv(used.df, outfile)
 
