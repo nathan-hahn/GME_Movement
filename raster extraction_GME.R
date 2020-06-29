@@ -8,6 +8,7 @@
 Sys.setenv(TZ="Africa/Nairobi") 
 
 library(dplyr)
+library(lubridate)
 library(sp)
 library(raster)
 
@@ -32,6 +33,7 @@ study.area <- '+proj=utm +init=epsg:32736'
 
 # get rasters from spatial data folder and set CRS
 dist2ag <- raster("./spatial data/dist2ag_estes_32736_2019-11-21.tif")
+dist2agedge <- raster("./spatial data/dist2agedge_estes_20200629.tif")
 dist2permwater <- raster("./spatial data/dist2permanent_water_20200624.tif")
 dist2seasonalwater <- raster("./spatial data/dist2seasonal_water_20200624.tif")
 dist2water <- raster("./spatial data/dist2merged_water_20200624.tif")
@@ -66,7 +68,7 @@ s <- stack(dist2ag, dist2water, slope, pa, lc)
 ## Extract raster covariates
 
 # create matrix for used points
-used <- matrix(1, nrow = nrow(df), ncol = 10)
+used <- matrix(1, nrow = nrow(df), ncol = 11)
 # create spatial points 
 locs <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df, 
                                proj4string = crs(study.area))
@@ -74,14 +76,15 @@ locs <- SpatialPointsDataFrame(as.matrix(df[c("x","y")]), data = df,
 # ~20 minutes
 system.time({
 used[,2] <- extract(dist2ag, locs)
-used[,3] <- extract(dist2water, locs)
-used[,4] <- extract(dist2permwater, locs)
-used[,5] <- extract(dist2seasonalwater, locs)
-used[,6] <- extract(slope, locs)
-used[,7] <- extract(gHM, locs)
-used[,8] <- extract(pa, locs)
-used[,9] <- extract(lc, locs)
-used[,10] <- extract(dist2forest, locs)
+used[,3] <- extract(dist2agedge, locs) 
+used[,4] <- extract(dist2water, locs)
+used[,5] <- extract(dist2permwater, locs)
+used[,6] <- extract(dist2seasonalwater, locs)
+used[,7] <- extract(slope, locs)
+used[,8] <- extract(gHM, locs)
+used[,9] <- extract(pa, locs)
+used[,10] <- extract(lc, locs)
+used[,11] <- extract(dist2forest, locs)
 })
 
 # check
@@ -109,7 +112,7 @@ summary(used)
 mode(used) = "numeric"
 used2 <- as.data.frame(used)
 used2$ID <- as.character(locs@data$id)
-colnames(used2) <- c("used", "dist2ag", "dist2water", "dist2permwater", "dist2seasonalwater", 
+colnames(used2) <- c("used", "dist2ag", "dist2agedge", "dist2water", "dist2permwater", "dist2seasonalwater", 
                      "slope", "gHM", "pa", "lc.estes", "dist2forest", "merge_id")
 head(used2)
 
@@ -122,7 +125,20 @@ test <- subset(used.df, id != merge_id)
 nrow(test) # should be zero
 used.df$merge_id <- NULL
 
+
+##### Adjust ag edge #####
+used.df$dist2agedge <- ifelse(used.df$lc.estes == 1, -(used.df$dist2agedge), used.df$dist2agedge)
+
 ##########################################################################################
+
+#####Add crop season variable
+#' Bi-seasonal variable (long/short rains)
+#' Yearly cut point (September)
+
+t <- used.df
+
+t$cropseason <- ifelse(month(t$date) >= 4 | month(t$date) <= 9, "long", "short")
+
 
 ####Add season variable####
 #' Must extend season clustering to cover full extent of tracking data
