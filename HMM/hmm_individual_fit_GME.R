@@ -38,35 +38,50 @@ par1 <- list(step = c(1, 4, 6, 2, 1, 1),
 #' ---- Fit models ----
 #' Each model runs, reports sys.time, and saves 
 
+# library(doParallel)
+# cl <- makeCluster(3)
+# registerDoParallel(cl)
+# 
+# 
+# library(foreach)
+# system.time({
+#   m1.indiv <- foreach::foreach(i = 1:3) %dopar% 
+#     momentuHMM::fitHMM(data = indiv.log.velocity[[i]], nbStates = 3, dist = distNorm,
+#                        Par0 = par1,
+#                        #retryFits = 4,
+#                        stateNames = stateNames3,
+#                        formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2water + gHM,
+#                        modelName = "dist2ag + dist2ag^2 + dist2forest + dist2water + gHM")
+#   
+# })
+# 
+# saveRDS(m1.indiv, "m1_individual.rds")
+
+
+
+
+
 library(doParallel)
-cl <- makeCluster(7)
+cl <- makeCluster(3)
 registerDoParallel(cl)
 
 
 library(foreach)
 system.time({
-  m1.indiv <- foreach::foreach(i = 1:42) %dopar% 
+  m3.indiv <- foreach::foreach(i = 1:3) %dopar% 
     momentuHMM::fitHMM(data = indiv.log.velocity[[i]], nbStates = 3, dist = distNorm,
                        Par0 = par1,
-                       retryFits = 4,
+                       #retryFits = 4,
                        stateNames = stateNames3,
-                       formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2water + gHM,
-                       modelName = "dist2ag + dist2ag^2 + dist2forest + dist2water + gHM")
+                       formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2permwater + dist2seasonalwater + gHM,
+                       modelName = "dist2ag + dist2ag^2 + dist2forest + dist2permwater + dist2seasonalwater + gHM")
   
 })
 
-saveRDS(m1.indiv, "m1_individual.rds")
+saveRDS(m3.indiv, "m3_individual.rds")
 
-# get viterbi estimates and extract data frames
-temp <- list()
 
-for (i in 1:length(m1.indiv)) {
-  m.indiv[[i]]$data$viterbi <- viterbi(m.indiv[[i]])
-  temp[[i]] <- m.indiv[[i]]$data
-}
 
-result.mfit <- do.call(rbind, temp)
 
-# save dataframes  
-saveRDS(result.mfit, "df_mfit_indiv.rds")
+
 
