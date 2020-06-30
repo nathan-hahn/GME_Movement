@@ -7,7 +7,7 @@ source("./GME_functions.R")
 #' ---- Prep data for HMM population model fitting ----
 
 # Add data with raster covariates. 
-used.all <- readRDS("./GMM/GMEcollars_002_usedClust_2020-06-05.rds")
+used.all <- readRDS("./movdata/GMEcollars_002_used_2020-06-30.rds")
 used.all <- used.all[!is.na(used.all$x),]
 used.all <- used.all %>%
   filter(fixType != "irregular")
@@ -19,7 +19,7 @@ used.all <- used.all %>%
 
 # filter to bursts that are large enough for test/train
 t <- used.all %>%
-  group_by(burst, subject_name, ag.class.both) %>% tally() %>%
+  group_by(burst, subject_name) %>% tally() %>%
   mutate(train = n*.90, test = n*.10) %>%
   filter(train > 500 & test > 500) %>% droplevels()
 
@@ -27,7 +27,7 @@ used.all <- filter(used.all, burst %in% t$burst) %>% droplevels()
 
 # divide datasets by individual
 split <- split(used.all, used.all$burst)
-split <- c(split[1], split[2], split[6], split[14], split[23]) #TEMP -- only use Alina and Kegol
+split <- c(split[1], split[15], split[6]) #TEMP -- only use 3 elephants
 
 # withold data
 cut = .10
@@ -42,10 +42,16 @@ saveRDS(train, "./HMM/TEST_traindf_original.rds")
 
 #' ---- Standardize Covariates ----
 # standardize covariates
-cor.vars <- c("dist2ag", "dist2forest", "dist2water", "slope")
+cor.vars <- c("dist2ag", "dist2agedge", "dist2forest", "dist2water", "dist2permwater","dist2seasonalwater", "slope")
 st.covs <- train %>%
   dplyr::select(cor.vars)%>%
   apply(., 2, function(x) (x - mean(x)) / sd(x)) %>%
+  as.data.frame()
+
+# normalize covariates - check
+nm.covs <- train %>%
+  dplyr::select(cor.vars) %>%
+  apply(., 2, function(x) (x - min(x)) / (max(x) - min(x))) %>%
   as.data.frame()
 
 # check dimensions
