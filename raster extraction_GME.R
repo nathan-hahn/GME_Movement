@@ -18,7 +18,7 @@ library(raster)
 
 # load RData
 df <- readRDS("./movdata/GMEcollars_002_clean_2020-06-25.rds")
-
+df$date <- ymd_hms(df$date, tz = "Africa/Nairobi")
 # summarize relocs by individual  
 df %>%
   group_by(id) %>%
@@ -135,10 +135,20 @@ used.df$dist2agedge <- ifelse(used.df$lc.estes == 1, -(used.df$dist2agedge), use
 #' Bi-seasonal variable (long/short rains)
 #' Yearly cut point (September)
 
-t <- used.df
+# make sure date/time is in EAT
+used.df$date <- ymd_hms(used.df$date, tz = "Africa/Nairobi")
 
-t$cropseason <- ifelse(month(t$date) >= 4 | month(t$date) <= 9, "long", "short")
+# Bi-seasonal variable - long/short rains crop seasons
+used.df$cropseason <- as.factor(ifelse(month(used.df$date) >= 4 & month(used.df$date) <= 9, "long", "short"))
 
+# Yearly cuts - set september break points
+year.cuts <- as.POSIXct(strptime(c("2011-09-01", "2012-09-01", "2013-09-01", "2014-09-01", "2015-09-01", 
+                                 "2016-09-01", "2017-09-01", "2018-09-01", "2019-09-01", "2020-09-02"), 
+                                 format = "%Y-%m-%d"))
+year.names <- c("2011", "2012", '2013', "2014", "2015", "2016", "2017", "2018", "2019")
+# get yearly cuts using september break points
+rng <- cut(used.df$date, breaks = c(year.cuts), include.lowest = T, labels = year.names)
+used.df$year.cuts <- rng
 
 ####Add season variable####
 #' Must extend season clustering to cover full extent of tracking data
@@ -148,8 +158,8 @@ t$cropseason <- ifelse(month(t$date) >= 4 | month(t$date) <= 9, "long", "short")
 
 # use csv with all season windows combined
 windows <- read.csv("~/Dropbox (Personal)/CSU/MEP/Data/spatial data/season_windows.csv")
-windows$start <- as.POSIXct(strptime(windows$start, format = "%Y-%m-%d %H:%M:%S", tz="Africa/Nairobi" ))
-windows$end <- as.POSIXct(strptime(windows$end, format = "%Y-%m-%d %H:%M:%S", tz="Africa/Nairobi" ))
+windows$start <- as.POSIXct(strptime(windows$start, format = "%Y-%m-%d %H:%M:%S", tz="Africa/Nairobi"))
+windows$end <- as.POSIXct(strptime(windows$end, format = "%Y-%m-%d %H:%M:%S", tz="Africa/Nairobi"))
 
 # cut, setting breaks as the start dates and the max end date for season
 rng <- cut(used.df$date,
