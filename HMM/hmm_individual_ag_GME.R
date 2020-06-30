@@ -101,7 +101,7 @@ system.time({
   
 })
 
-saveRDS(m7.indiv, "m5_individual.rds")
+saveRDS(m7.indiv, "m7_individual.rds")
 
 
 
@@ -123,7 +123,7 @@ saveRDS(m9.indiv, "m9_individual.rds")
 
 
 # TEMP -- assess AIC for each individual by model
-t[1] <- AIC(m1.indiv[[3]])
+t[1,] <- cbind(AIC(m1.indiv[[3]]), m1.indiv[[3]]$modelName)
 t[2] <- AIC(m2.indiv[[3]])
 t[3] <- AIC(m2.indiv[[3]])
 t[3] <- AIC(m3.indiv[[3]])

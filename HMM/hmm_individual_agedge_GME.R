@@ -121,7 +121,7 @@ system.time({
   
 })
 
-saveRDS(m4.indiv, "m6_individual.rds")
+saveRDS(m6.indiv, "m6_individual.rds")
 
 
 
@@ -137,7 +137,7 @@ system.time({
   
 })
 
-saveRDS(m4.indiv, "m8_individual.rds")
+saveRDS(m8.indiv, "m8_individual.rds")
 
 
 
