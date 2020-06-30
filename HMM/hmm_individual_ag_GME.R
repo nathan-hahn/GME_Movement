@@ -97,7 +97,7 @@ system.time({
                        #retryFits = 4,
                        stateNames = stateNames3,
                        formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2permwater + gHM,
-                       modelName = "dist2ag + dist2forest + dist2permwater + gHM")
+                       modelName = "dist2ag + dist2ag^2 + dist2dist2forest + dist2permwater + gHM")
   
 })
 
