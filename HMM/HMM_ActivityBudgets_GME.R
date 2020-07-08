@@ -39,7 +39,7 @@ system.time({
   ts <- lapply(split, as.ts, start = split[[i]]$date, frequency = 1) # frequency set with 30min fixes
   tx <- lapply(ts, as.xts)
   res <- lapply(seq_along(tx), function(i) rollapply(tx[[i]]$ag.used, width = window, align = "center", by.column = FALSE,
-                                                     FUN = rollstat, na.rm = FALSE))
+                                                     FUN = rollstat))
   merge <- lapply(seq_along(res), function(i) cbind(split[[i]], as.data.frame(res[[i]])))
 })
 
@@ -78,7 +78,41 @@ landUse <- plot_budget(t = output.plot, facet = viterbi ~ pa.2, title = "GME: Ac
 landUse
 
 
+##### Overlap Tests #####
 
+d1 <- output.plot %>%
+  filter(viterbi == "transit" & ag.window == 0) %>%
+  filter(ag.class.both == '2')
+#d1 <- density(as.numeric(hour(d1$date))) #check
+
+d0 <- output.plot %>%
+  filter(viterbi == "transit" & ag.window == 0) %>%
+  filter(ag.class.both == '3')
+#d0 <- density(as.numeric(hour(d0$date))) #check
+
+d <- list(as.numeric(hour(d0$date)), as.numeric(hour(d1$date)))
+
+library(overlapping)
+t <- overlap(d, plot = T)
+boot <- boot.overlap(d, B = 1000)
+boot$OVboot_stats
+
+# bootstrap quantile intervals
+apply(boot$OVboot_dist, 2, quantile, probs = c(.05, .9) )
+# plot of bootstrap distributions
+Y <- stack( data.frame(boot$OVboot_dist ))
+ggplot( Y, aes( values )) + facet_wrap( ~ind ) + geom_density()
+
+
+##### Binomial ######
+df <- output.plot %>%
+  mutate(subject_name = as.factor(subject_name)) %>%
+  mutate(hour = as.factor(lubridate::hour(date))) %>%
+  select(subject_name, hour, viterbi, ag.window) 
+
+library(lme4)
+mod <- glmer(formula=ag.window~viterbi*hour+(1|subject_name),
+             family = binomial, data = df)
 
 
 
