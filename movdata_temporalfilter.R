@@ -1,6 +1,9 @@
 #### Used Filter #####
 
-movdat <- readRDS('./movdata/GMEcollars_002_used_2020-06-20.rds')
+library(dplyr)
+library(lubridate)
+
+movdat <- readRDS('./movdata/GMEcollars_002_used_2020-06-30.rds')
 movdat$subject_name <- ifelse(is.na(movdat$subject_name), movdat$collar_id, movdat$subject_name)
 
 gr <- movdat %>%
@@ -27,7 +30,7 @@ fixes <- downsampled %>%
 
 movdat.filter <- filter(downsampled, subject_name %in% fixes$subject_name)
 
-saveRDS(movdat.filter, "./movdata/GMEcollars_002_usedFilter_2020-06-20.rds")
+saveRDS(movdat.filter, "./movdata/GMEcollars_002_usedFilter_2020-06-30.rds")
 
 
 ### TEMPORARY

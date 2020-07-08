@@ -10,12 +10,22 @@ source("GME_functions.R")
 
 #### Prep Data ####
 # Load filtered data for individuals that meet temporal and spatial criteria for clustering
-movdat.filter <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-06-20.rds')
+movdat.filter <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-06-30.rds')
 
 # dataframe for fitting
 df <- movdat.filter %>%
   mutate(ag.used = if_else(lc.estes == 1, 1, 0),
-         month = month(date)) 
+         month = month(date)) # %>% group_by(subject_name) %>%
+  # # filter to indiv with 1+ year of data
+  # mutate(start.time = min(date), end.time = max(date), 
+  #        difftime = difftime(end.time, start.time, units = 'days')) %>% filter(difftime > 365) %>%
+  # ungroup()
+
+t <- df %>% group_by(subject_name, start.time, end.time, difftime) %>% tally()
+  
+
+
+
 
 ##### Mean occupancy #####
 ag.mean <- df %>%
@@ -35,10 +45,11 @@ ag.month <- df %>%
 # max monthly occupancy
 max <- ag.month %>%
   group_by(subject_name) %>%
+  filter(n.month >= 5*24) %>%
   slice(which.max(month.occupancy)) %>%
   ungroup() %>%
-  mutate(max.occupancy = round(month.occupancy, 5)) %>% dplyr::select(-month.occupancy) %>%
-  filter(n.month >= 5*24)
+  mutate(max.occupancy = round(month.occupancy, 5)) %>% dplyr::select(-month.occupancy) 
+
 
 # bar plot of ag occupancy by month
 p <- ggplot(ag.month, aes(month, month.occupancy)) + geom_bar(stat = "identity") + facet_wrap(.~subject_name) + 
@@ -48,7 +59,7 @@ p
 
 ##### Rolling Occupancy #####
 # filter for rolling mean calculations - at least 4 months of data
-roll.filter <- movdat.filter %>%
+roll.filter <- df %>%
   group_by(subject_name) %>%
   tally() %>% 
   filter(n >= 2880) 
@@ -83,7 +94,8 @@ result$diff <- result$roll.max - result$mean.occupancy
 ####Model Fitting####
 
 # fit model with mean ag occupancy
-m1 <- Mclust(result$mean.occupancy)
+
+m1 <- Mclust(result$mean.occupancy, G = 3)
 plot(m1, what = "classification",
      xlab = "mean ag occupancy",
      ylab = "cluster")
@@ -98,7 +110,7 @@ plot(m2, what = "classification",
 # fit model with rolling max occupancy
 t <- result$roll.max
 t <- t[complete.cases(t)]
-m2.roll <- Mclust(t, G = 2)
+m2.roll <- Mclust(t, G = 3)
 plot(m2.roll, what = "classification",
      xlab = "roll max",
      ylab = "cluster")
@@ -119,12 +131,12 @@ plot(m4, what = "classification",
      ylab = "roll.max ag occupancy")
 
 
-diff.df <- cbind(result$mean.occupancy, result$diff)
+diff.df <- cbind(result$roll.max, result$diff)
 diff.df <- diff.df[complete.cases(diff.df), ]
-m5 <- Mclust(diff.df, G = 4)
+m5 <- Mclust(diff.df, G = 3)
 plot(m5, what = "classification",
      xlab = "mean ag occupancy",
-     ylab = "roll.max ag occupancy")
+     ylab = "diff")
 
 ##### Results #####
 
@@ -137,13 +149,13 @@ plot(m4, what = "BIC", main = "m4 - Mean - Max Rolling Ag")
 
 # add classification to results
 ag.class.mean <- as.factor(m1$classification)
-ag.class.max <- as.factor(m2.roll$classification)
-ag.class.roll <- as.factor(m4$classification)
-ag.class.roll <- factor(ag.class.roll, levels(ag.class.roll)[c(1,3,2,4)], labels = c(1,2,3,4))
+ag.class.roll <- as.factor(m2.roll$classification)
+ag.class.both <- as.factor(m4$classification)
+ag.class.both <- factor(ag.class.both, levels(ag.class.both)[c(1,3,2,4)], labels = c(1,2,3,4))
 
 result$ag.class.mean <- ag.class.mean
-result$ag.class.max <- ag.class.max
 result$ag.class.roll <- ag.class.roll
+result$ag.class.both <- ag.class.both
 
 # Summarize by individual
 clust.result <- result %>%
@@ -267,10 +279,10 @@ t <- MclustDR(m4)
 ##### Summary Outputs #####
 # Summarize by class
 clust.summary <- clust.result %>%
-  group_by(ag.class.max) %>%
-  summarise(n = length(ag.class.max),
-            mean = mean(roll.max),
-            sd = sd(roll.max),
+  group_by(ag.class.both) %>%
+  summarise(n = length(mean.occupancy),
+            mean = mean(mean.occupancy),
+            sd = sd(mean.occupancy),
             se = sd/sqrt(n),
             lower.ci = mean - qt(1 - (0.05 / 2), n - 1) * se,
             upper.ci = mean + qt(1 - (0.05 / 2), n - 1) * se)
