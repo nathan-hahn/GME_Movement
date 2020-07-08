@@ -100,6 +100,7 @@ plot(m1, what = "classification",
      xlab = "mean ag occupancy",
      ylab = "cluster")
 
+
 # fit model with max monthly ag occupancy
 m2 <- Mclust(result$max.occupancy)
 summary(m2, classification = TRUE)
