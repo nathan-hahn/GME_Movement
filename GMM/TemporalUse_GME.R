@@ -1,5 +1,6 @@
 ##### Ag Temporal Use #####
 library(tidyverse)
+library(lubridate)
 source("GME_functions.R")
 
 ##### Data Prep #####
@@ -10,7 +11,7 @@ movdat.filter$ag.used <- ifelse(movdat.filter$lc.estes == 1, 1, 0)
 roll.filter <- movdat.filter %>%
   group_by(subject_name) %>%
   tally() %>% 
-  filter(n >= 24*30*4) # months
+  filter(n >= 24*30*3) # months
 
 roll.df <- filter(movdat.filter, subject_name %in% roll.filter$subject_name)
 split <- split(roll.df, roll.df$subject_name)
@@ -22,8 +23,9 @@ for(i in 1:length(window)){
   # calculate moving window stats - see rollstats function
   output.plot[[i]] <- window_stats(df.list = split, window = window[[i]], align = 'center')
   # remove NAs from ag windows - created by window cutoff
-  output.plot[[i]] <- filter(output.plot[[i]], is.na(ag.window) == FALSE) %>% droplevels()
+  #output.plot[[i]] <- filter(output.plot[[i]], is.na(ag.window) == FALSE) %>% droplevels()
 }
+
 
 
 ##### Max by Crop Season #####
@@ -34,21 +36,24 @@ roll.90 <- output.plot[[1]] %>%
   mutate(
     month = month(date),
     cropseason = case_when(
-      month %in% 4:8 ~ "long",
+      month %in% 4:10 ~ "long",
       TRUE ~ "short"))
 
 # Yearly cuts - set september break points
 year.cuts <- ymd_hms(c("2010-04-01 00:00:00", "2011-04-01 00:00:00", "2012-04-01 00:00:00", "2013-04-01 00:00:00", "2014-04-01 00:00:00", 
                                    "2015-04-01 00:00:00", "2016-04-01 00:00:00", "2017-04-01 00:00:00", 
                                    "2018-04-01 00:00:00", "2019-04-01 00:00:00", "2020-04-01 00:00:00"), tz = 'Africa/Nairobi')
-year.names <- c("2011", "2012", '2013', "2014", "2015", "2016", "2017", "2018", "2019", "2020")
+year.names <- c("2010", "2011", '2012', "2013", "2014", "2015", "2016", "2017", "2018", "2019")
 # get yearly cuts using september break points
-rng <- cut(roll.90$date, breaks = c(year.cuts), include.lowest = T, labels = year.names)
-roll.90$year.cuts <- rng
+rng <- cut(roll.90$date, breaks = c(year.cuts), include.lowest = T)
+rng.name <- cut(roll.90$date, breaks = c(year.cuts), include.lowest = T, labels = year.names)
+roll.90$cut.date <- rng
+roll.90$year.cuts <- rng.name
 
 
 roll.90$roll.season <- as.factor(paste(roll.90$year.cuts, roll.90$cropseason, sep = '-'))
 
+saveRDS(roll.90, './GMM/res90_agmovingwindow.rds')
 
 # get the max and min values for each season
 amplitude <- roll.90 %>%
@@ -90,13 +95,13 @@ year.cuts <- ymd_hms(c("2010-04-01 00:00:00", "2011-04-01 00:00:00", "2012-04-01
 season.cuts <- ymd_hms(c("2010-04-01 00:00:00", "2011-04-01 00:00:00", "2012-04-01 00:00:00", "2013-04-01 00:00:00", "2014-04-01 00:00:00", 
                        "2015-04-01 00:00:00", "2016-04-01 00:00:00", "2017-04-01 00:00:00", 
                        "2018-04-01 00:00:00", "2019-04-01 00:00:00", "2020-04-01 00:00:00", 
-                       "2010-09-30 00:00:00", "2011-09-30 00:00:00", "2012-09-30 00:00:00", "2013-09-30 00:00:00", "2014-09-30 00:00:00", 
-                       "2015-09-30 00:00:00", "2016-09-30 00:00:00", "2017-09-30 00:00:00", 
-                       "2018-09-30 00:00:00", "2019-09-30 00:00:00", "2020-09-30 00:00:00"), 
+                       "2010-10-30 00:00:00", "2011-10-30 00:00:00", "2012-10-30 00:00:00", "2013-10-30 00:00:00", "2014-09-30 00:00:00", 
+                       "2015-10-30 00:00:00", "2016-10-30 00:00:00", "2017-10-30 00:00:00", 
+                       "2018-10-30 00:00:00", "2019-10-30 00:00:00", "2020-10-30 00:00:00"), 
                        tz = 'Africa/Nairobi')
 
 res.90 <- output.plot[[1]] %>%
-  filter(subject_name %in% c("Lowana")) 
+  filter(subject_name %in% c("Ivy")) 
 res.90$ag.used <- ifelse(res.90$ag.used == 1, 0.75, NA) # adjust ag.used values for plotting for visibility
 p90 <- ggplot(res.90, aes(x = date, color = subject_name)) + #, color = name
   geom_point(aes(y = ag.used), color = "grey40", size = .2, alpha = 0.5) +
@@ -107,7 +112,8 @@ p90 <- ggplot(res.90, aes(x = date, color = subject_name)) + #, color = name
        subtitle = "90-Day Moving Average with 95% CI Bands") +
   theme(legend.position="none")
 
-p90 + geom_vline(xintercept=as.numeric(year.cuts, linetype=4))
+p90 + geom_vline(xintercept=as.numeric(season.cuts, linetype=4)) 
+
   
   
 
