@@ -4,8 +4,8 @@ library(lubridate)
 source("GME_functions.R")
 
 ##### Data Prep #####
-movdat.filter <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-06-30.rds')
-movdat.filter$ag.used <- ifelse(movdat.filter$lc.estes == 1, 1, 0) 
+movdat <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-07-09.rds')
+movdat$ag.used <- ifelse(movdat$lc.estes == 1, 1, 0) 
 
 ##### Rolling Stats #####
 roll.filter <- movdat.filter %>%
@@ -53,7 +53,7 @@ roll.90$year.cuts <- rng.name
 
 roll.90$roll.season <- as.factor(paste(roll.90$year.cuts, roll.90$cropseason, sep = '-'))
 
-saveRDS(roll.90, './GMM/res90_agmovingwindow.rds')
+saveRDS(roll.90, paste0('./GMM/GMEcollars_002_res90_', Sys.Date(),'.rds'))
 
 # get the max and min values for each season
 amplitude <- roll.90 %>%

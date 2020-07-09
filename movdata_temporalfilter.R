@@ -20,4 +20,4 @@ mep <- movdat %>%
 
 downsampled <- rbind(gr, mep) 
 
-saveRDS(downsampled, "./movdata/GMEcollars_002_usedFilter_2020-06-30.rds")
+saveRDS(downsampled, paste0("./movdata/GMEcollars_002_usedFilter_", Sys.Date(),".rds"))
