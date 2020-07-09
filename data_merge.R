@@ -43,7 +43,8 @@ gr <- gr %>%
 
 # merge
 output <- bind_rows(mep, gr) %>%
-  filter(year(date) < 2020) 
+  filter(year(date) < 2020) %>%
+  mutate(subject_sex = if_else(subject_sex %in% c("male", "M"), "male", "female"))
 
 
 ##### Tracking Summary #####
