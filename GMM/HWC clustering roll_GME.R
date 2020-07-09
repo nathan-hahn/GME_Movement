@@ -10,18 +10,17 @@ source("GME_functions.R")
 
 #### Prep Data ####
 # Load filtered data for individuals that meet temporal and spatial criteria for clustering
-movdat.filter <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-06-30.rds')
+movdat.filter <- readRDS('./GMM/GMEcollars_002_res90_2020-07-09.rds')
 
 # dataframe for fitting
-df <- movdat.filter %>%
-  mutate(ag.used = if_else(lc.estes == 1, 1, 0),
-         month = month(date)) # %>% group_by(subject_name) %>%
+df <- movdat.filter #%>%
+  # mutate(ag.used = if_else(lc.estes == 1, 1, 0),
+  #        month = month(date)) # %>% group_by(subject_name) %>%
   # # filter to indiv with 1+ year of data
   # mutate(start.time = min(date), end.time = max(date), 
   #        difftime = difftime(end.time, start.time, units = 'days')) %>% filter(difftime > 365) %>%
   # ungroup()
-
-t <- df %>% group_by(subject_name, start.time, end.time, difftime) %>% tally()
+#t <- df %>% group_by(subject_name, start.time, end.time, difftime) %>% tally()
   
 
 
@@ -50,7 +49,6 @@ max <- ag.month %>%
   ungroup() %>%
   mutate(max.occupancy = round(month.occupancy, 5)) %>% dplyr::select(-month.occupancy) 
 
-
 # bar plot of ag occupancy by month
 p <- ggplot(ag.month, aes(month, month.occupancy)) + geom_bar(stat = "identity") + facet_wrap(.~subject_name) + 
   scale_x_discrete(name ="month", breaks=c(3,6,9))
@@ -58,29 +56,9 @@ p
 
 
 ##### Rolling Occupancy #####
-# filter for rolling mean calculations - at least 4 months of data
-roll.filter <- df %>%
+roll.max <- df %>%
   group_by(subject_name) %>%
-  tally() %>% 
-  filter(n >= 2880) 
-
-roll.df <- filter(df, subject_name %in% roll.filter$subject_name)
-split <- split(roll.df, roll.df$subject_name)
-
-# assign window sizes - check alignment of window
-window <- c(90*24) # days*hrs
-
-roll.output <- NULL
-for(i in 1:length(window)){
-  # calculate moving window stats - see rollstats function
-  roll.output[[i]] <- window_stats(df.list = split, window = window[[i]], align = "center")
-  # remove NAs from ag windows - created by window cutoff
-  roll.output[[i]] <- filter(roll.output[[i]], is.na(ag.window) == FALSE) %>% droplevels()
-}
-
-# extract max window output. Test for window size
-roll.max <- roll.output[[1]] %>%
-  group_by(subject_name) %>%
+  filter(is.na(mean) == FALSE) %>%
   summarise(roll.max = max(mean)) 
 
 
@@ -117,8 +95,8 @@ plot(m2.roll, what = "classification",
      ylab = "cluster")
 
 # fit model with mean and max occupancy data
-both.df <- cbind(result$mean.occupancy, result$max.occupancy)
-m3 <- Mclust(both.df)
+both.df <- cbind(result$mean.occupancy, result$roll.max)
+m3 <- Mclust(both.df, )
 plot(m3, what = "classification",
      xlab = "mean ag occupancy",
      ylab = "max monthly ag occupancy")
@@ -304,21 +282,10 @@ ggplot(clust.result, aes(x = mean.occupancy, y = ag.class.roll)) + geom_boxplot(
 ##### Export #####
 # new used df with cluster classification. 
 # has ag.class.mean and ag.class.both classifications included
-{outfile <- paste0("./GMM/GMEcollars_002_usedClust_", Sys.Date(), ".rds")
-saveRDS(clust.df, outfile)}
 
-{outfile <- paste0("./GMM/GMEcollars_002_usedClust_", Sys.Date(), ".csv")
-  write.csv(clust.df, outfile)}
-
-# cluster results
+# cluster results - lumped over collar lifetime
 {outfile <- paste0("./GMM/results/clustResult_GME_", Sys.Date(), ".csv")
   write.csv(clust.result, outfile)}
 
-# cluster summary (mean or both)
-{outfile <- paste0("./GMM/GMEcollars_002_clustSummary_", Sys.Date(), ".csv")
-  write.csv(clust.result, outfile)}
-
-{outfile <- paste0("./GMM/GMEcollars_002_clustSummary_", Sys.Date(), ".csv")
-  write.csv(clust.summary, outfile)}
 
 
