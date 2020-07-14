@@ -10,22 +10,11 @@ source("GME_functions.R")
 
 #### Prep Data ####
 # Load filtered data for individuals that meet temporal and spatial criteria for clustering
-movdat.filter <- readRDS('./GMM/GMEcollars_002_res90_2020-07-09.rds')
+movdat.filter <- readRDS('./GMM/GMEcollars_002_res90_2020-07-14.rds')
 
-# dataframe for fitting
-df <- movdat.filter #%>%
-  # mutate(ag.used = if_else(lc.estes == 1, 1, 0),
-  #        month = month(date)) # %>% group_by(subject_name) %>%
-  # # filter to indiv with 1+ year of data
-  # mutate(start.time = min(date), end.time = max(date), 
-  #        difftime = difftime(end.time, start.time, units = 'days')) %>% filter(difftime > 365) %>%
-  # ungroup()
-#t <- df %>% group_by(subject_name, start.time, end.time, difftime) %>% tally()
+# dataframe for fitting - add custom filters here as needed
+df <- movdat.filter 
   
-
-
-
-
 ##### Mean occupancy #####
 ag.mean <- df %>%
   group_by(subject_name) %>%
@@ -73,7 +62,7 @@ result$diff <- result$roll.max - result$mean.occupancy
 
 # fit model with mean ag occupancy
 
-m1 <- Mclust(result$mean.occupancy, G = 3)
+m1 <- Mclust(result$mean.occupancy)
 plot(m1, what = "classification",
      xlab = "mean ag occupancy",
      ylab = "cluster")
@@ -95,7 +84,7 @@ plot(m2.roll, what = "classification",
      ylab = "cluster")
 
 # fit model with mean and max occupancy data
-both.df <- cbind(result$mean.occupancy, result$roll.max)
+both.df <- cbind(result$mean.occupancy, result$max.occupancy)
 m3 <- Mclust(both.df, )
 plot(m3, what = "classification",
      xlab = "mean ag occupancy",
@@ -130,7 +119,7 @@ plot(m4, what = "BIC", main = "m4 - Mean - Max Rolling Ag")
 ag.class.mean <- as.factor(m1$classification)
 ag.class.roll <- as.factor(m2.roll$classification)
 ag.class.both <- as.factor(m4$classification)
-ag.class.both <- factor(ag.class.both, levels(ag.class.both)[c(1,3,2,4)], labels = c(1,2,3,4))
+ag.class.both <- factor(ag.class.both)
 
 result$ag.class.mean <- ag.class.mean
 result$ag.class.roll <- ag.class.roll
@@ -256,23 +245,6 @@ t <- MclustDR(m4)
 
 
 ##### Summary Outputs #####
-# Summarize by class
-clust.summary <- clust.result %>%
-  group_by(ag.class.both) %>%
-  summarise(n = length(mean.occupancy),
-            mean = mean(mean.occupancy),
-            sd = sd(mean.occupancy),
-            se = sd/sqrt(n),
-            lower.ci = mean - qt(1 - (0.05 / 2), n - 1) * se,
-            upper.ci = mean + qt(1 - (0.05 / 2), n - 1) * se)
-(clust.summary)
-
-# clust.df <- clust.result %>%
-#   dplyr::select(subject_name, ag.class.both.4) %>%
-#   inner_join(.,df, by = "subject_name") %>%
-#   dplyr::select(-month) %>%
-#   as.data.frame()
-
 ggplot(clust.summary) + geom_bar(aes(x = ag.class.roll, y = mean), stat = "identity") + 
   geom_errorbar(aes(x = ag.class.roll, ymin = lower, ymax = upper), width = .2) + ylab("Mean Occupancy") + xlab("Tactic Cluster")
 
@@ -287,5 +259,7 @@ ggplot(clust.result, aes(x = mean.occupancy, y = ag.class.roll)) + geom_boxplot(
 {outfile <- paste0("./GMM/results/clustResult_GME_", Sys.Date(), ".csv")
   write.csv(clust.result, outfile)}
 
+
+saveRDS(m1, './GMM/results/mSelect_2020-07-14.rds')
 
 
