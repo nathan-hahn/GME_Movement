@@ -3,8 +3,7 @@
 library(dplyr)
 library(lubridate)
 
-movdat <- readRDS('./movdata/GMEcollars_002_used_2020-06-30.rds')
-movdat$subject_name <- ifelse(is.na(movdat$subject_name), movdat$collar_id, movdat$subject_name)
+movdat <- readRDS('./movdata/GMEcollars_002_used_2020-07-14.rds')
 
 gr <- movdat %>%
   filter(site == "gr") %>%
@@ -14,9 +13,9 @@ gr <- movdat %>%
 
 mep <- movdat %>%
   filter(site == "mep") %>%
-  filter(!(subject_name %in% c("Tunai","Bettye","Nancy", "Wilbur", 
+  filter(!(subject_name %in% c("Heritage", "Tunai","Bettye","Nancy", "Wilbur", 
                                "Julia", "Ndorre", "Nkoidila", "Santiyan", "Earhart",
-                               "Rudisha", "Naeku", "Olkeri", "ST2010-1441"))) 
+                               "Rudisha", "Naeku", "Olkeri", "ST2010-1441", "Rudisha"))) 
 
 downsampled <- rbind(gr, mep) 
 
