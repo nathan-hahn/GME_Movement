@@ -9,8 +9,8 @@ library(lubridate)
 
 
 ##### LOAD DATA #####
-mep <- readRDS("./movdata/MEPcollars_20200516_clean_2020-05-21.rds")
-metaMEP <- read.csv("./movdata/MEPcollars_20205016_metadata.csv")
+mep <- readRDS("./movdata/MEPcollars_20200815_clean_2020-09-02.rds")
+metaMEP <- read.csv("./movdata/MEPcollars_20200815_metadata.csv") 
 metaMEP$X <- NULL
 gr <- readRDS("./movdata/GRcollars_20191231_clean_2020-06-25.rds")
 metaGR <- read.csv("./movdata/GRcollars_20191231_metadata.csv")
@@ -19,11 +19,11 @@ metaGR <- read.csv("./movdata/GRcollars_20191231_metadata.csv")
 ##### MERGE #####
 # prep datasets
 mep <- mep %>%
-  mutate(ele.xy.TEMPERATURE = NA, subject_age = NA) %>%
+  mutate(ele.xy.TEMPERATURE = NA) %>%
   inner_join(., metaMEP, by = "id") %>%
   mutate(site = "mep",
          Fixtime = ymd_hms(Fixtime)) %>%
-  rename(date = Fixtime) 
+  rename(date = Fixtime)
 mep$n <- NULL
 mep.col.names <- colnames(mep)
 
@@ -31,19 +31,16 @@ mep.col.names <- colnames(mep)
 gr <- gr %>%
   left_join(., metaGR, by = "id") %>%
   rename(subject_name = Name, subject_sex = Sex, subject_age = Age) %>%
-  mutate(collar_id = as.character(id), 
-    id = paste(subject_name, substr(collar_id, nchar(collar_id)-3, nchar(collar_id)), sep = "-"), 
-    region = "Serengeti", fixType = "regular", site = "gr",
+  mutate(source_id = as.character(id), 
+    id = paste(subject_name, substr(source_id, nchar(source_id)-3, nchar(source_id)), sep = "-"), 
+    region = "serengeti", fixType = "regular", site = "gr",
     date = ymd_hms(date)) %>%
   dplyr::select(mep.col.names)
 
-
-# filter out 
-# mep <- filter(mep, region )
-
 # merge
 output <- bind_rows(mep, gr) %>%
-  filter(year(date) < 2020) %>%
+  #filter(year(date) < 2020) %>%
+  filter(region %in% c("serengeti", "masai mara")) %>%
   mutate(subject_sex = if_else(subject_sex %in% c("male", "M"), "male", "female"))
 
 
@@ -55,7 +52,7 @@ GME_summary <- function(data) {
   
   # 1. get summary stats by id
   sum <- data %>%
-    group_by(id, name, sex, site, fixType) %>%
+    group_by(subject_name, id, subject_sex, subject_ageClass, subject_dob, site, fixType) %>%
     summarise(dataStart = min(date),
               dataStop = max(date),
               daysTracked = dataStop - dataStart,
@@ -68,9 +65,6 @@ GME_summary <- function(data) {
            dataStop = as_date(dataStop),
            daysTracked = round(as.numeric(daysTracked)))
   
-  levels(table$sex)[levels(table$sex)=="M"] <- "Male"
-  levels(table$sex)[levels(table$sex)=="F"] <- "Female"
-  
   # 3. Return summary table
   return(table)
   
@@ -78,15 +72,15 @@ GME_summary <- function(data) {
 
 # summary table
 tracking.summary <- GME_summary(data = output)
-
+View(tracking.summary)
 
 ##### SAVE #####
 outfile <- paste0("./movdata/GMEcollars_002_clean_", Sys.Date(), ".rds" )
 #write.csv(output, outfile)
 saveRDS(output, outfile)
 
-# outfile <- paste0("./movdata/GMEsummary_001.csv" )
-# write.csv(tracking.summary, outfile)
+outfile <- paste0("./movdata/GMEsummary_002.csv" )
+write.csv(tracking.summary, outfile)
 
 
 
