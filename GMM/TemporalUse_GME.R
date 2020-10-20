@@ -4,7 +4,7 @@ library(lubridate)
 source("GME_functions.R")
 
 ##### Data Prep #####
-movdat <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-09-06.rds')
+movdat <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-10-20.rds')
 movdat$ag.used <- ifelse(movdat$lc.estes == 1, 1, 0) 
 
 ##### Rolling Stats #####
@@ -53,7 +53,7 @@ roll.90$year.cuts <- rng.name
 roll.90$roll.season <- as.factor(paste(roll.90$year.cuts, roll.90$cropseason, sep = '-'))
 
 # export movdata with season and year cuts
-saveRDS(roll.90, paste0('./GMM/GMEcollars_002_res90_', Sys.Date(),'.rds'))
+saveRDS(roll.90, paste0('./GMM/movdata/GMEcollars_002_res90_', Sys.Date(),'.rds'))
 
 
 ##### Amplitude #####
