@@ -4,7 +4,7 @@ library(lubridate)
 source("GME_functions.R")
 
 ##### Data Prep #####
-movdat <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-07-14.rds')
+movdat <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-09-06.rds')
 movdat$ag.used <- ifelse(movdat$lc.estes == 1, 1, 0) 
 
 ##### Rolling Stats #####
@@ -59,6 +59,7 @@ saveRDS(roll.90, paste0('./GMM/GMEcollars_002_res90_', Sys.Date(),'.rds'))
 ##### Amplitude #####
 # get the max and min values for each season
 amplitude <- roll.90 %>%
+  filter(!is.na(mean)) %>%
   group_by(subject_name, year.cuts) %>%
   mutate(season.mean = mean(ag.used),
          season.max = max(mean),
@@ -76,7 +77,7 @@ View(amplitude)
 split <- split(amplitude, amplitude$year.cuts)
 
 
-t <- Mclust(amplitude$season.mean)
+t <- Mclust(amplitude$season.max)
 plot(t, what = "classification")
 
 t <- Mclust(split[[1]]$season.max, G = 4)
@@ -101,16 +102,19 @@ season.cuts <- ymd_hms(c("2010-04-01 00:00:00", "2011-04-01 00:00:00", "2012-04-
                        tz = 'Africa/Nairobi')
 
 res.90 <- output.plot[[1]] %>%
-  filter(subject_name %in% c("Omondi")) 
-res.90$ag.used <- ifelse(res.90$ag.used == 1, 0.75, NA) # adjust ag.used values for plotting for visibility
+  filter(subject_name %in% c("Olchoda")) 
+res.90$ag.used <- ifelse(res.90$ag.used == 1, 0.5, NA) # adjust ag.used values for plotting for visibility
 p90 <- ggplot(res.90, aes(x = date, color = subject_name)) + #, color = name
   geom_point(aes(y = ag.used), color = "grey40", size = .2, alpha = 0.5) +
   #geom_ribbon(aes(ymin = lo.95, ymax = hi.95), size = .5, alpha = 0.4) +
   geom_line(aes(y = mean), size = 1, alpha = 0.7) +
   facet_wrap(~ subject_name) +
-  labs(title = "Ag Usage: Volatility and Trend",
-       subtitle = "90-Day Moving Average with 95% CI Bands") +
+  labs(title = "Ag Use Trend",
+       subtitle = "90-Day Moving Average") +
+  xlab("Date") + ylab("90-Day Mean Occupancy") +
   theme(legend.position="none")
+p90 + ylim(0, 0.5)
+
 
 p90 + geom_vline(xintercept=as.numeric(year.cuts, linetype=4)) 
 
