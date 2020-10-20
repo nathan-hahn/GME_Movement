@@ -12,9 +12,13 @@ library(anipaths)
 
 # load dataset as output from HMM.
 # viterbi is the state: 1 - encamped, 2 - foraging, 3 - exploratory
-output <- readRDS("./movdata/GMEcollars_001_used_2019-12-18.rds")
 
+hmm.df <- readRDS("./HMM/model results/Full Pop July2020/m8_pop_Julyfinal.rds") # output from hmm model (no squared term)
+output <- readRDS("./HMM/model results/Full Pop July2020/GMEcollars_002_population_original.rds") # dataset prior to data transforms
 
+# add viterbi estimates to the original dataframe -- revert to non-standardized covs and steps
+library(momentuHMM)
+output$viterbi <- viterbi(hmm.df)
 
 ## Trajectory creation
 # output is a dataframe with collar ID + locations + covariates + states
@@ -22,12 +26,13 @@ output <- readRDS("./movdata/GMEcollars_001_used_2019-12-18.rds")
 # requires package 'mapview'
 # ele.sldf is the trajectory, ele.sf are the points
 GSME <- st_read("./spatial data/GSE/GSE.shp")
-ele.df <- filter(output, name == "Shorty") %>%
+GMF <- st_read("./spatial data/ag/ag_vec_change03_reclassMara.shp")
+ele.df <- filter(output, subject_name == "Ivy") %>%
   mutate(row.id = seq.int(nrow(.))) %>%
   drop_na(x,y) %>%
   droplevels()
-ele.sf <- st_as_sf(ele.df, coords = c("x", "y"), crs = 32737) # for some reason doesn't work with ..36
-
+ele.sf <- st_as_sf(ele.df, coords = c("x", "y"), crs = 32736) # for some reason doesn't work with ..36
+split <- split(ele.sf, ele.sf$viterbi)
 # create sldf of trajectories. Key: each step must be it's own line!! 
 # Creates begin and end coords that are used to build individual steps
 # https://stackoverflow.com/questions/20531066/convert-begin-and-end-coordinates-into-spatial-lines-in-r
@@ -40,16 +45,33 @@ for (i in seq_along(l)) {
   l[[i]] <- Lines(list(Line(rbind(begin.coord[i, ], end.coord[i,]))), as.character(i))
 }
 
-sl <- SpatialLines(l, proj4string = CRS('+proj=utm +init=epsg:32737'))
+sl <- SpatialLines(l, proj4string = CRS('+proj=utm +init=epsg:32736'))
 ele.sldf <- SpatialLinesDataFrame(sl, data = ele.df)
+
+t1 <- split[[1]]
+t2 <- split[[2]]
+t3 <- split[[3]]
 
 ## Visualize the result by individual in mapview
 # hacky way to plot. Using zcol not cooperating
-mapview(ele.sf, cex = 0.1, alpha = 0, legend = TRUE) + # for legend, make points super small
-  mapview(GSME, col.regions="darkgreen", color="darkgreen", alpha.regions=0.25) +
-  mapview(ele.sldf, color = "grey", cex = 0.5) +
-  mapview(ele.sf, color = "black", cex = 0.5)
+mapview(GSME, col.regions="darkgreen", color="black", alpha.regions=0, cex = 3) +
+  mapview(ele.sldf, color = "grey", cex = 0.1) +
+  mapview(t3, color = "#009E73", cex = 1.5) +
+  mapview(t2, color = "#56B4E9", cex = 1.5) +
+  mapview(t1, color = "#E69F00", cex = 1.5)
 
+pal <- c("#E69F00", "#56B4E9", "#009E73") # color pallet 
+#mapview(ele.sf, zcol = "viterbi", col.region = pal, cex = 0.1, alpha = 0, legend = TRUE) + # for legend, make points super small
+  mapview(GSME, col.regions="darkgreen", color="black", alpha.regions=0) +
+  mapview(GMF, col.regions="yellow", color="yellow", alpha.regions=0.5) +
+  mapview(ele.sldf, color = "darkgrey", cex = 0.1) + 
+  mapview(filter(ele.sf, viterbi == 2), color = pal[2], cex = 1.5, alpha = 1, legend = FALSE) +
+  mapview(filter(ele.sf, viterbi == 3), color = pal[3], cex = 1.5, alpha = 1, legend = FALSE) +
+  mapview(filter(ele.sf, viterbi == 1), color = pal[1], cex = 1.5, alpha = 1, legend = FALSE) 
+
+
+st_write(ele.sf, 'Ivy_sf.shp', driver = 'ESRI Shapefile')
+st_write(st_as_sf(ele.sldf), 'Ivy_sldf', driver = 'ESRI Shapefile')
 
 ## Path animation
 source("C:/Users/nhahn/Dropbox (Personal)/CSU/R/Functions/Traj_Function.R")
