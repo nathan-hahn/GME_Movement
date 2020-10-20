@@ -128,3 +128,28 @@ withold <- function(x, cut, type) {
   
   return(y)
 }
+
+
+##### cluster cutpoints #####
+#To extract the cutoff between any two clusters from an mclust object
+cluster_cutpoint<-function(object, comp, grph=T) {
+  
+  mu1<-object$parameters$mean[comp[1]]
+  mu2<-object$parameters$mean[comp[2]]
+  sd1<-sqrt(object$parameters$variance$sigmasq[comp[1]])
+  sd2<-sqrt(object$parameters$variance$sigmasq[comp[2]])
+  
+  if(length(object$parameters$variance$sigmasq)>1) {sd2<-sqrt(object$parameters$variance$sigmasq[comp[2]])}
+  
+  ss<-seq(0,.5, 0.001)
+  cut<-ss[max(which(pnorm(ss, mu1, sd1, lower.tail=F)>pnorm(ss, mu2, sd2)))]
+  
+  if (grph) {plot(ss, pnorm(ss, mu1, sd1, lower.tail=F),col="red", type="l", xlab="Mean Ag Use", ylab="Probability", main="Prob of being in cluster")
+    lines(ss,  pnorm(ss, mu2, sd2), col="blue")
+    abline(v=cut, lwd=2, lty=2)}
+  
+  return(cut)
+  
+}
+
+
