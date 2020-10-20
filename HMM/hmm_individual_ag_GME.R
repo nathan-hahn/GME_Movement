@@ -43,35 +43,35 @@ cl <- makeCluster(3)
 registerDoParallel(cl)
 
  
-# library(foreach)
-# system.time({
-#   m1.indiv <- foreach::foreach(i = 1:3) %dopar% 
-#     momentuHMM::fitHMM(data = indiv.log.velocity[[i]], nbStates = 3, dist = distNorm,
-#                        Par0 = par1,
-#                        #retryFits = 4,
-#                        stateNames = stateNames3,
-#                        formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2water + gHM,
-#                        modelName = "dist2ag + dist2ag^2 + dist2forest + dist2water + gHM")
-#   
-# })
-# 
-# saveRDS(m1.indiv, "m1_individual.rds")
-#
-#
-#
-# library(foreach)
-# system.time({
-#   m3.indiv <- foreach::foreach(i = 1:3) %dopar% 
-#     momentuHMM::fitHMM(data = indiv.log.velocity[[i]], nbStates = 3, dist = distNorm,
-#                        Par0 = par1,
-#                        #retryFits = 4,
-#                        stateNames = stateNames3,
-#                        formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2permwater + dist2seasonalwater + gHM,
-#                        modelName = "dist2ag + dist2ag^2 + dist2forest + dist2permwater + dist2seasonalwater + gHM")
-#   
-# })
-# 
-# saveRDS(m3.indiv, "m3_individual.rds")
+library(foreach)
+system.time({
+  m1.indiv <- foreach::foreach(i = 1:3) %dopar%
+    momentuHMM::fitHMM(data = indiv.log.velocity[[i]], nbStates = 3, dist = distNorm,
+                       Par0 = par1,
+                       #retryFits = 4,
+                       stateNames = stateNames3,
+                       formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2water + gHM + slope,
+                       modelName = "dist2ag + dist2ag^2 + dist2forest + dist2water + gHM + slope")
+
+})
+
+saveRDS(m1.indiv, "m1_individual.rds")
+
+
+
+library(foreach)
+system.time({
+  m3.indiv <- foreach::foreach(i = 1:3) %dopar%
+    momentuHMM::fitHMM(data = indiv.log.velocity[[i]], nbStates = 3, dist = distNorm,
+                       Par0 = par1,
+                       #retryFits = 4,
+                       stateNames = stateNames3,
+                       formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2permwater + dist2seasonalwater + gHM + slope,
+                       modelName = "dist2ag + dist2ag^2 + dist2forest + dist2permwater + dist2seasonalwater + gHM + slope")
+
+})
+
+saveRDS(m3.indiv, "m3_individual.rds")
 
 
 library(foreach)
@@ -81,8 +81,8 @@ system.time({
                        Par0 = par1,
                        #retryFits = 4,
                        stateNames = stateNames3,
-                       formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2permwater + dist2seasonalwater + gHM,
-                       modelName = "dist2ag + dist2forest + dist2permwater + dist2seasonalwater + gHM")
+                       formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2permwater + dist2seasonalwater + gHM + slope,
+                       modelName = "dist2ag + dist2forest + dist2permwater + dist2seasonalwater + gHM + slope")
 
 })
 
@@ -96,8 +96,8 @@ system.time({
                        Par0 = par1,
                        #retryFits = 4,
                        stateNames = stateNames3,
-                       formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2permwater + gHM,
-                       modelName = "dist2ag + dist2ag^2 + dist2dist2forest + dist2permwater + gHM")
+                       formula = ~ dist2ag + I(dist2ag^2) + dist2forest + dist2permwater + gHM + slope,
+                       modelName = "dist2ag + dist2ag^2 + dist2dist2forest + dist2permwater + gHM + slope")
   
 })
 
@@ -120,11 +120,3 @@ system.time({
 saveRDS(m9.indiv, "m9_individual.rds")
 
 
-
-
-# TEMP -- assess AIC for each individual by model
-t[1,] <- cbind(AIC(m1.indiv[[3]]), m1.indiv[[3]]$modelName)
-t[2] <- AIC(m2.indiv[[3]])
-t[3] <- AIC(m2.indiv[[3]])
-t[3] <- AIC(m3.indiv[[3]])
-t[4] <- AIC(m4.indiv[[3]])
