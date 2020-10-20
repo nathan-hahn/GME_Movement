@@ -3,7 +3,7 @@
 library(dplyr)
 library(lubridate)
 
-movdat <- readRDS('./movdata/GMEcollars_002_used_2020-07-14.rds')
+movdat <- readRDS('./movdata/GMEcollars_002_used_2020-09-06.rds')
 
 gr <- movdat %>%
   filter(site == "gr") %>%
@@ -17,6 +17,11 @@ mep <- movdat %>%
                                "Julia", "Ndorre", "Nkoidila", "Santiyan", "Earhart",
                                "Rudisha", "Naeku", "Olkeri", "ST2010-1441", "Rudisha"))) 
 
-downsampled <- rbind(gr, mep) 
+# bind and limit up to 2019 data
+downsampled <- rbind(gr, mep) %>% 
+  filter(year(date) <= 2019) %>% droplevels()
+max(downsampled$date)
+
 
 saveRDS(downsampled, paste0("./movdata/GMEcollars_002_usedFilter_", Sys.Date(),".rds"))
+
