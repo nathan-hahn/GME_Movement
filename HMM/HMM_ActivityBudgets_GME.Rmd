@@ -94,6 +94,26 @@ x.72
 # landUse
 ```
 
+
+```{r}
+ggplot(output.plot[[2]], aes(hour(date))) + facet_grid(~viterbi) + stat_ecdf(aes(colour = ag.window), geom = "step") 
+
+ecdf <- NULL
+split <- split(output.plot[[2]], list(output.plot[[2]]$ag.window, 
+                                      output.plot[[2]]$viterbi))
+for (i in 1:length(split)){
+  ecdf[[i]] <- ecdf(hour(split[[i]]$date))
+  #ks[[i]] <- ks.test(ecdf[[i]])
+}
+
+```
+
+
+
+
+
+
+
 ### Overlap test
 
 Initial overlap test compares the distributions in and outside of the ag matrix, across the three activity states.
@@ -120,15 +140,18 @@ forage.1 <- timeRad[which(overlap$viterbi == "foraging" | overlap$ag.window == 1
 transit.0 <- timeRad[which(overlap$viterbi == "transit" | overlap$ag.window == 0)]
 transit.1 <- timeRad[which(overlap$viterbi == "transit" | overlap$ag.window == 1)]
 
+
+densityPlot(encamped.0, kmax = 3)
+
 # overlap tests
-encamped_est <- overlapEst(encamped.0, encamped.1)
+encamped_est <- overlapEst(encamped.0, encamped.1, type = "Dhat4")
 forage_est <- overlapEst(forage.0, forage.1, type="Dhat1")
 transit_est <- overlapEst(transit.0, transit.1, type ="Dhat1")
 
 # Bootstraping
-
+encamped.boot <- bootstrap(encamped.0, encamped.1, 1000, type = "Dhat4")
 
 # CI
-
+bootCI(encamped_est, encamped.boot)
 ```
 
