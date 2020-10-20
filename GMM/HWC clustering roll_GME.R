@@ -10,7 +10,7 @@ source("GME_functions.R")
 
 #### Prep Data ####
 # Load filtered data for individuals that meet temporal and spatial criteria for clustering
-movdat.filter <- readRDS('./GMM/GMEcollars_002_res90_2020-07-14.rds')
+movdat.filter <- readRDS('./GMM/GMEcollars_002_res90_2020-09-03.rds')
 
 # dataframe for fitting - add custom filters here as needed
 df <- movdat.filter 
@@ -78,14 +78,14 @@ plot(m2, what = "classification",
 # fit model with rolling max occupancy
 t <- result$roll.max
 t <- t[complete.cases(t)]
-m2.roll <- Mclust(t, G = 3)
+m2.roll <- Mclust(t)
 plot(m2.roll, what = "classification",
      xlab = "roll max",
      ylab = "cluster")
 
 # fit model with mean and max occupancy data
 both.df <- cbind(result$mean.occupancy, result$max.occupancy)
-m3 <- Mclust(both.df, )
+m3 <- Mclust(both.df, G = 6)
 plot(m3, what = "classification",
      xlab = "mean ag occupancy",
      ylab = "max monthly ag occupancy")
@@ -99,9 +99,10 @@ plot(m4, what = "classification",
      ylab = "roll.max ag occupancy")
 
 
+
 diff.df <- cbind(result$roll.max, result$diff)
 diff.df <- diff.df[complete.cases(diff.df), ]
-m5 <- Mclust(diff.df, G = 3)
+m5 <- Mclust(diff.df)
 plot(m5, what = "classification",
      xlab = "mean ag occupancy",
      ylab = "diff")
@@ -145,7 +146,66 @@ plot(boot.m1, what = "mean")
 
 ### crossvalidation - Mean Ag, Mean=Max, Mean=Roll.Max
 
-# Mean Ag, G = 3
+# Mean
+set.seed(1992)
+train <- sample(1:nrow(clust.result), size = round(nrow(clust.result)*(2/3)), replace = FALSE)
+X.train <- clust.result[train,]
+Class.train <- clust.result$ag.class.mean[train]
+#table(Class.train)
+
+X.test <- clust.result[-train,]
+Class.test <- clust.result$ag.class.mean[-train]
+#table(Class.test)
+
+mod1 <- MclustDA(X.train$mean.occupancy, Class.train, modelType = "EDDA")
+sum1 <- summary(mod1, newdata = X.test$mean.occupancy, newclass = Class.test)
+
+
+
+# Roll.max
+set.seed(54)
+train <- sample(1:nrow(clust.result), size = round(nrow(clust.result)*(2/3)), replace = FALSE)
+X.train <- clust.result[train,]
+Class.train <- clust.result$ag.class.roll[train]
+#table(Class.train)
+
+X.test <- clust.result[-train,]
+Class.test <- clust.result$ag.class.roll[-train]
+#table(Class.test)
+
+mod2 <- MclustDA(X.train$roll.max, Class.train, modelType = "EDDA")
+sum2 <- summary(mod2, newdata = X.test$roll.max, newclass = Class.test)
+
+
+# Both
+set.seed(112)
+train <- sample(1:nrow(clust.result), size = round(nrow(clust.result)*(2/3)), replace = FALSE)
+X.train <- clust.result[train,]
+Class.train <- clust.result$ag.class.both[train]
+#table(Class.train)
+
+X.test <- clust.result[-train,]
+Class.test <- clust.result$ag.class.both[-train]
+#table(Class.test)
+
+mod3 <- MclustDA(cbind(X.train$roll.max, X.train$mean.occupancy), Class.train, modelType = "EDDA")
+sum3 <- summary(mod3, newdata = cbind(X.test$roll.max, X.test$mean.occupancy), newclass = Class.test)
+
+sum1
+sum2
+sum3
+
+cvMclustDA(mod1)
+cvMclustDA(mod2)
+cvMclustDA(mod3)
+
+
+
+
+
+
+
+# Mean Ag, G = 4
 trainData <- cbind(clust.result$mean.occupancy)
 trainClass <- clust.result$ag.class.mean
 
@@ -161,10 +221,11 @@ for(i in seq(models)) {
   t <- cvMclustDA(mod, nfold = 10, verbose = FALSE)
   tab[i,3] <- t$error
   tab[i,4] <- t$se
-  tab[i,5] <- "3"
+  tab[i,5] <- "4"
   tab[i,6] <- "m1"
 }
 tab.m1 <- as.data.frame(tab)
+tab.m1
 
 # G = 4
 trainData <- cbind(clust.result$mean.occupancy, clust.result$max.occupancy)
@@ -205,11 +266,12 @@ for(i in seq(models)) {
   t <- cvMclustDA(mod, nfold = 10, verbose = FALSE)
   tab[i,3] <- t$error
   tab[i,4] <- t$se
-  tab[i,5] <- "3"
+  tab[i,5] <- "6"
   tab[i,6] <- "m4"
 }
 
 tab.m4 <- as.data.frame(tab)
+tab.m4
 
 # create single table and filter to 5 largest BIC values
 tab.cv <- rbind(tab.m1, tab.m3, tab.m4) %>%
