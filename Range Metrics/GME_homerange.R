@@ -17,19 +17,30 @@ library(ggplot2, warn.conflicts = FALSE, quietly = TRUE)
 source("./GME_functions.R")
 
 # GME movement data - 2019
-gme <- readRDS("./GMM/GMEcollars_002_usedClust_2020-06-02.rds")
-stack <- readRDS("./spatial data/GME_rasterStack_20200602.rds")
+gme <- readRDS("./GMM/GMEcollars_002_usedClust_2020-07-14.rds")
+#stack <- readRDS("./spatial data/GME_rasterStack_20200602.rds")
 
 
 #' ### Build homeranges
 # prep spdf
 t <-  filter(gme, !is.na(x)) %>%
-  dplyr::select(x, y, subject_name) 
+  dplyr::select(x, y, subject_name, year.cuts) 
 coordinates(t) <-~x+y
 
-# build MCP's by subject_name
-split <- split(t, t$subject_name)
+# build MCP's by subject_name and year.cut
+#splt.by <- c('subject_name','year.cuts')
+split <- split(t, list(t$subject_name, t$year.cuts), drop = TRUE)
 mcp <- lapply(split, mcp)
+split.area <- lapply(split, cbind, year.mcp = mcp$area)
+
+split.area <- list()
+for(i in 1:length(split)){
+  split.area[[i]] <- cbind(split[[i]], newcol = mcp[[i]]$area)
+  colnames(split.area[[i]]@data) <- c("subject_name", "year.cuts", "year.mcp.area")
+}
+mcp.areas <- do.call(rbind, split.area)
+gme$year.mcp.area <- mcp.areas@data$year.mcp.area
+
 
 ##### cut raster stack by 
 # mask landcover raster to homeranges
