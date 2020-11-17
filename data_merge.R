@@ -9,7 +9,7 @@ library(lubridate)
 
 
 ##### LOAD DATA #####
-mep <- readRDS("./movdata/MEPcollars_20200815_clean_2020-09-02.rds")
+mep <- readRDS("./movdata/MEPcollars_20200815_clean_2020-10-30.rds")
 metaMEP <- read.csv("./movdata/MEPcollars_20200815_metadata.csv") 
 metaMEP$X <- NULL
 gr <- readRDS("./movdata/GRcollars_20191231_clean_2020-06-25.rds")
@@ -75,11 +75,11 @@ tracking.summary <- GME_summary(data = output)
 View(tracking.summary)
 
 ##### SAVE #####
-outfile <- paste0("./movdata/GMEcollars_002_clean_", Sys.Date(), ".rds" )
+outfile <- paste0("./movdata/GMEcollars_003_clean_", Sys.Date(), ".rds" )
 #write.csv(output, outfile)
 saveRDS(output, outfile)
 
-outfile <- paste0("./movdata/GMEsummary_002.csv" )
+outfile <- paste0("./movdata/GMEsummary_003.csv" )
 write.csv(tracking.summary, outfile)
 
 

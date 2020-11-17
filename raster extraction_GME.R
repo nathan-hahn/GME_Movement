@@ -17,7 +17,7 @@ library(raster)
 ####Prep data####
 
 # load RData
-df <- readRDS("./movdata/GMEcollars_002_clean_2020-09-05.rds")
+df <- readRDS("./movdata/GMEcollars_003_clean_2020-10-30.rds")
 df$date <- ymd_hms(df$date, tz = "Africa/Nairobi")
 # summarize relocs by individual  
 df %>%
@@ -138,11 +138,11 @@ used.df$dist2agedge <- ifelse(used.df$lc.estes == 1, -(used.df$dist2agedge), use
 ####Export####
 
 # write to rds file
-outfile <- paste0("./movdata/GMEcollars_002_used_", Sys.Date(), ".rds")
+outfile <- paste0("./movdata/GMEcollars_003_used_", Sys.Date(), ".rds")
 saveRDS(used.df, outfile)
 
 # write to csv file
-outfile <- paste0("./movdata/GMEcollars_002_used_", Sys.Date(), ".csv")
+outfile <- paste0("./movdata/GMEcollars_003_used_", Sys.Date(), ".csv")
 write.csv(used.df, outfile)
 
 ########################################################################################################

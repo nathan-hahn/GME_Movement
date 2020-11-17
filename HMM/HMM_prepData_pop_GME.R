@@ -8,7 +8,7 @@ source("./GME_functions.R")
 #' ---- Prep data for HMM population model fitting ----
 
 # Add data with raster covariates. 
-used.all <- readRDS("./GMM/GMEcollars_002_usedClust_2020-07-14.rds")
+used.all <- readRDS("./GMM/movdata/GMEcollars_003_usedClust_2020-10-30.rds")
 #used.all <- used.all[!is.na(used.all$x),]
 used.all <- used.all %>%
   filter(fixType != "irregular") %>%
@@ -89,11 +89,11 @@ individual.velocity <- lapply(split, log_velocity)
 population.velocity <- do.call("rbind", individual.velocity)
 
 # save as rdata for us on secondary machines
-saveRDS(individual.velocity, "./HMM/GMEcollars_002_individual_logVeloc.rds")
-saveRDS(population.velocity, "./HMM/GMEcollars_002_population_logVeloc.rds")
+saveRDS(individual.velocity, "./HMM/GMEcollars_003_individual_logVeloc.rds")
+saveRDS(population.velocity, "./HMM/GMEcollars_003_population_logVeloc.rds")
 
 # save original dataframe to attach after fitting
-saveRDS(used.all, "./HMM/GMEcollars_002_population_original.rds")
+saveRDS(used.all, "./HMM/GMEcollars_003_population_original.rds")
 
 
 

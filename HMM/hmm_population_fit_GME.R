@@ -14,7 +14,7 @@ library(forcats)
 Sys.setenv(TZ="Africa/Nairobi") 
 
 
-pop.log.veloc <- readRDS("./HMM/GMEcollars_002_population_logVeloc.rds")
+pop.log.veloc <- readRDS("./HMM/GMEcollars_003_population_logVeloc.rds")
 
 #' ---- Specify parameters ---- 
 
@@ -120,14 +120,7 @@ saveRDS(m6.pop, "m6_pop.rds")
 
 
 
-m8.pop <- momentuHMM::fitHMM(data = pop.log.veloc, nbStates = 3, dist = distNorm,
-                       Par0 = par1,
-                       #retryFits = 4,
-                       stateNames = stateNames3,
-                       formula = ~ dist2agedge + I(dist2agedge^2) + dist2forest + dist2permwater + dist2seasonalwater + gHM + slope,
-                       modelName = "dist2agedge + dist2agedge^2 + dist2forest + dist2permwater + dist2seasonalwater + gHM + slope")
-
-saveRDS(m8.pop, "m8_pop.rds")
+ 
 
 
 

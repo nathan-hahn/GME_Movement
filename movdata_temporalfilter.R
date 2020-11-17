@@ -3,7 +3,7 @@
 library(dplyr)
 library(lubridate)
 
-movdat <- readRDS('./movdata/GMEcollars_002_used_2020-10-20.rds')
+movdat <- readRDS('./movdata/GMEcollars_003_used_2020-10-30.rds')
 
 gr <- movdat %>%
   filter(site == "gr") %>%
@@ -23,5 +23,5 @@ downsampled <- rbind(gr, mep) %>%
 max(downsampled$date)
 
 
-saveRDS(downsampled, paste0("./movdata/GMEcollars_002_usedFilter_", Sys.Date(),".rds"))
+saveRDS(downsampled, paste0("./movdata/GMEcollars_003_usedFilter_", Sys.Date(),".rds"))
 
