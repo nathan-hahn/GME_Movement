@@ -22,18 +22,16 @@ library(momentuHMM)
 source('GME_functions.R')
 
 ##### Prep Data #####
-hmm.df <- readRDS("./HMM/model results/Full Pop July2020/m8_pop_Julyfinal.rds") # output from hmm model (no squared term)
-output <- readRDS("./HMM/model results/Full Pop July2020/GMEcollars_002_population_original.rds") # dataset prior to data transforms
+hmm.df <- readRDS('m8_pop_003.rds') # output from hmm model (global)
+output <- readRDS("./HMM/GMEcollars_003_population_original.rds") # dataset prior to data transforms
 
 # add viterbi estimates to the original dataframe -- revert to non-standardized covs and steps
 output$viterbi <- viterbi(hmm.df)
-
 
 # add stationary state props
 t <- stationary(hmm.df)
 df <- as.data.frame(t[[1]])
 output <- cbind(output, df)
-
 
 # create new varibles to differentiate ag and non-ag in non-protected areas
 output$ag.used <- ifelse(output$lc.estes == 1, 1, 0)
@@ -41,6 +39,7 @@ output$pa <- factor(output$pa, levels = c(3:1))
 # 4 is ag in non-protected areas
 output$pa.2 <- ifelse(output$pa == 1 & output$ag.used == 1, 4, output$pa)
 
+# remove old ag.window calculations 
 output <- output %>%
   dplyr::select(-c(mean, stdev, hi.95, lo.95, ag.window))
 
@@ -60,7 +59,18 @@ system.time({
 
 output <- do.call("rbind", merge)
 
-write.csv(output, "./HMM/model results/agWindow_temporary_df.csv")
+#write.csv(output, "./HMM/model results/agWindow_temporary_df.csv")
+
+# ag window stats
+output %>%
+  group_by(tactic.season, ag.window) %>%
+  summarise(n = n())
+
+output$t <- output$ag.window - lag(output$ag.window)
+
+output$window.start <- ifelse(output$ag.window - lag(output$ag.window) == 1, 1, 0)
+output$window.start <- ifelse(output$ag.window - lag(output$ag.window) == -1, 1, output$ag.window)
+
 
 ##### Activity Budgets #####
 
@@ -79,14 +89,43 @@ output.plot <- mutate(output, viterbi = recode_factor(viterbi,
 ) 
 
 
-# t <- ifelse(is.na(output.plot$ag.window) == TRUE, 0, output.plot$ag.window)
-# output.plot$ag.window <- as.factor(t)
-
 # check data before plotting -- are there enough points for a density plot?
 t <- output.plot %>%
-  group_by(burst, ag.window, viterbi) %>%
+  group_by(tactic.season, ag.window, viterbi) %>%
   tally()
 (t)
+
+# simple pct. budget summary
+library(DescTools)
+ag.budget <- t %>%
+  group_by(tactic.season, ag.window) %>%
+  summarize(pct = n/sum(n)) %>%
+  
+ag.budget$state <- t$viterbi
+
+# with CIs
+ag.budget <- t %>%
+  group_by(tactic.season, ag.window) %>%
+  mutate(prop = MultinomCI(n, conf.level = 0.95, sides = 'two.sided')[,1],
+         lwr.ci = MultinomCI(n, conf.level = 0.95, sides = 'two.sided')[,2],
+         upr.ci = MultinomCI(n, conf.level = 0.95, sides = 'two.sided')[,3],
+  ) %>%
+  mutate(ag.window = recode_factor(ag.window,
+                                   '0' = 'out-ag',
+                                   '1' = 'in-ag')) %>%
+  rename(tactic = tactic.season)
+
+
+
+# plot w/ CIs
+ggplot(ag.budget, aes(x = as.factor(ag.window), y = prop, group = tactic)) + 
+  geom_pointrange(aes(ymin = lwr.ci, ymax = upr.ci, color = tactic)) + xlab("Tactic class") + ylab("Proportion") +
+  geom_line(aes(color = tactic), linetype = "dashed") + 
+  facet_wrap(.~viterbi) + ylab("% time spent in state") + xlab("ag bout")
+
+# spread and get absolute differences between movement phases
+t <- spread(ag.budget, key = ag.window, value = pct)
+t$abs.diff <- abs(t$`0` - t$`1`)
 
 #output.plot <- filter(output.plot, burst == "Shorty-3016.1" | burst == "ST2010-2767.1")
 
@@ -98,7 +137,7 @@ agWindow
 # landUse <- plot_budget(t = output.plot, facet = viterbi ~ pa.2, title = "GME: Activity budget by land use type")
 # landUse
 # budget by ag tactic
-tactic <- plot_budget(t = output.plot, facet = viterbi ~ tactic.season, title = "GME: Activity budget by land use type")
+tactic <- plot_budget(t = output.plot, facet = viterbi ~ tactic.season, title = "GME: Activity budget by tactic")
 tactic
 
 
@@ -205,17 +244,17 @@ for(i in 1:3){
 state.comps <- do.call(rbind, comp)
 
 
-## Ag Window comps look
+## Ag comps across tactics
 agWindow <- c(0,1)
 x <- c(1:4)
 tactic.comp <- combn(x, 2)
 comp <- list()
 #comp <- vector(mode = "list", length = 2*3*6)
-# state loop
+# window loop
 for(i in 1:2){
   # viterbi loop
   for(j in 1:3){
-    # tactic comp loop
+    # comp loop - across tactic
     for(k in 1:6){
       #create comps
       comp0 <- list(ag.window = agWindow[i], viterbi = as.integer(j), tactic.season = tactic.comp[,k][1])
@@ -234,12 +273,109 @@ for(i in 1:2){
       comp[[name]]$state <- as.integer(j)
       comp[[name]]$comp <- paste(tactic.comp[,k][1], tactic.comp[,k][2], sep='-')
       
+      
+      
     }
   }
 }
 
 ag.comp <- do.call(rbind, comp)
 
+
+## Ag comps by tactics
+
+agWindow <- c(1,2)
+
+comp <- list()
+# viterbi loop
+for(i in 1:3){
+  # comp loop - within tactic
+  for(j in 1:4){
+    #create comps
+    comp0 <- list(ag.window = 0, viterbi = as.integer(i), tactic.season = as.integer(j))
+    comp1 <- list(ag.window = 1, viterbi = as.integer(i), tactic.season = as.integer(j))
+    
+    # run and store overlap output
+    t <- overlap.test(df = output, comp0 = comp0, comp1 = comp1)
+    q <- quantile(t$bootstrap$OVboot_dist, probs = c(0.05, 0.95))
+    name <- paste(as.integer(i), as.integer(j), sep='-')
+    
+    # store state and comp name
+    comp[[name]] <- t$bootstrap$OVboot_stats
+    comp[[name]]$lwr <- as.numeric(q[1])
+    comp[[name]]$upr <- as.numeric(q[2])
+    comp[[name]]$state <- as.integer(i)
+    comp[[name]]$tactic <- as.character(j)
+    
+  }
+}
+
+
+# comps within tactic
+tactic.ag.comp <- do.call(rbind, comp)
+
+
+
+
+
+## Ag comps by tactics - individual
+
+# filter out individuals with <1000 points in either ag window type
+t <- output %>%
+  filter(!is.na(ag.window)) %>%
+  group_by(subject_name, tactic.season, ag.window) %>%
+  summarise(n = n(),
+            mean = mean(ag.used)) %>%
+  filter(n < 100) %>% droplevels()
+  
+indiv.comp <- output %>%
+  filter(!(subject_name %in% t$subject_name)) %>% 
+  mutate(comp_id = paste(subject_name, tactic.season, sep = '-')) %>%
+  filter(!(comp_id %in% c("Courtney-1", "Marima-1", "Jinomoja-1"))) %>% droplevels()
+
+levels(indiv.comp$subject_name) # check filtering
+
+split <- split(indiv.comp, indiv.comp$comp_id)
+
+# run comps
+
+# comp0 <- list(ag.window = 0, viterbi = as.integer(2))
+# comp1 <- list(ag.window = 1, viterbi = as.integer(2))
+# 
+# t <- overlap.test(df = split[["Fitz-4"]], comp0 = comp0, comp1 = comp1)
+# q <- quantile(t$bootstrap$OVboot_dist, probs = c(0.05, 0.95))
+# name <- paste(split[["Fitz-4"]]$comp_id[1], as.integer(2), sep='-')
+
+
+
+comp <- list()
+# subject loop
+for(i in 1:66){
+  # viterbi loop
+  for(j in 1:3){
+      #create comps
+      comp0 <- list(ag.window = 0, viterbi = as.integer(j))
+      comp1 <- list(ag.window = 1, viterbi = as.integer(j))
+    
+      # run and store overlap output
+      t <- overlap.test(df = split[[i]], comp0 = comp0, comp1 = comp1)
+      q <- quantile(t$bootstrap$OVboot_dist, probs = c(0.05, 0.95))
+      name <- paste(split[[i]]$comp_id[1], as.integer(j), sep='-')
+    
+      # store state and comp name
+      comp[[name]] <- t$bootstrap$OVboot_stats
+      comp[[name]]$lwr <- as.numeric(q[1])
+      comp[[name]]$upr <- as.numeric(q[2])
+      comp[[name]]$state <- as.integer(j)
+      comp[[name]]$tactic <- split[[i]]$tactic.season[1]
+      comp[[name]]$subject_name <- split[[i]]$subject_name[1]
+    
+   }
+}
+
+# comps within tactic
+tactic.ag.comp <- do.call(rbind, comp)
+write.csv(tactic.ag.comp, 'indv.ag.comp.csv')
 
 ## Vizualise results ##
 
@@ -257,12 +393,36 @@ comps$AgWindow <- factor(comps$AgWindow,levels(factor(comps$AgWindow))[c(1,3,2)]
 comps$state.names <- as.factor(comps$state)
 levels(comps$state.names) <- c("Encamped", "R-A Search", "Exploratory")
 
+
+## Significance tests
+# anova on overlap estimates
+t <- aov(estOV ~ as.factor(compType)*as.factor(state), data = comps)
+summary(t)
+TukeyHSD(t)
+
+# test for differences by anova
+split <- split(comps, comps$state)
+t <- aov(estOV ~ as.factor(AgWindow), data = split[[1]])
+summary(t)
+TukeyHSD(t)
+
+# generate grand means and CIs for overlaps - same as bootstrapping method
+mdat <- aggregate(estOV ~ compType + state, data = comps, FUN = 'mean') %>%
+  mutate(compType = as.factor(compType), state = as.factor(state))
+fit2 <- lm(estOV~compType + state, data=mdat)
+
+# compare using glm - same as anova
+t <- glm(estOV ~ AgWindow, data = split[[3]])
+summary(t)
+
+
+## Visualize overlap comp results
 library(DescTools)
 # get tactic-level mean overlaps
 comp.sum <- comps %>%
-  #mutate(AgWindow.2 = ifelse(AgWindow == "Baseline", "Baseline", "Ag.Weighted")) %>%
-  #group_by(AgWindow.2, state.names) %>%
-  group_by(AgWindow, state.names) %>%
+  mutate(AgWindow.2 = ifelse(AgWindow == "Baseline", "Baseline", "Ag.Weighted")) %>%
+  group_by(AgWindow.2, state.names) %>%
+  #group_by(AgWindow, state.names) %>%
   summarise(n = n(),
             grand.mean.OV = mean(estOV),
             lwr.ci = MeanCI(estOV, method = "boot", type = "norm", R=1000)[2],
@@ -270,29 +430,33 @@ comp.sum <- comps %>%
 
 comp.sum
 
-
 # plot comps
 ggplot(data = comp.sum, aes(x = state.names, y = grand.mean.OV)) +
   geom_pointrange(aes(ymin = lwr.ci, ymax = upr.ci, color = as.factor(AgWindow)), position = position_dodge(0.4))
 
 comps.2 <- comps %>%
-  mutate(AgWindow.2 = ifelse(AgWindow == "Baseline", "Baseline", "Window"))
-ggplot(data = comps.2, aes(x = state.names, y = estOV)) + geom_boxplot(aes(color = as.factor(AgWindow.2)))
+  mutate(AgWindow = ifelse(AgWindow == "Baseline", "Baseline", "Ag-Weighted")) %>% droplevels()
+ggplot(data = comps.2, aes(x = state.names, y = estOV)) + geom_boxplot(aes(color = as.factor(AgWindow)))
 
 # plot
 ggplot(data = comps, aes(x = comp, y = estOV)) + 
   geom_pointrange(aes(ymin = lwr, ymax = upr, color = as.factor(AgWindow)), position = position_dodge(0.4)) + 
-  facet_wrap(~state) + xlab("Tactic Comparison") + ylab("Overlap Estimate") +
+  facet_wrap(~state.names) + xlab("Tactic Comparison") + ylab("Overlap Estimate") +
   labs(color = "Comparison Type") +
   scale_color_manual(values = c("#F8766D", "#00BFC4", "grey50")) + theme_bw()
 
 
-ggplot(data = filter(comps, AgWindow != "Non-Ag Window"), aes(x = comp, y = estOV)) + 
+ggplot(data = filter(comps, AgWindow != "Baseline"), aes(x = comp, y = estOV)) + 
   geom_pointrange(aes(ymin = lwr, ymax = upr, color = as.factor(AgWindow)), position = position_dodge(0.4)) + 
   facet_wrap(~state.names) + xlab("Tactic Comparison") + ylab("Overlap Estimate") +
   labs(color = "Comparison Type") +
   scale_color_manual(values = c("#F8766D", "grey50")) + theme_bw()
 
+ggplot(data = comps.2, aes(x = comp, y = estOV)) + 
+  geom_pointrange(aes(ymin = lwr, ymax = upr, color = as.factor(AgWindow)), position = position_dodge(0.4)) + 
+  facet_wrap(~state.names) + xlab("Tactic Comparison") + ylab("Overlap Estimate") +
+  labs(color = "Comparison Type") +
+  scale_color_manual(values = c("#F8766D", "grey50")) + theme_bw()
 
 
 ##### Stationary States #####
