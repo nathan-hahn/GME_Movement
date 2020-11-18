@@ -10,7 +10,7 @@ source("GME_functions.R")
 
 #### Prep Data ####
 # Load filtered data for individuals that meet temporal and spatial criteria for clustering
-movdat.filter <- readRDS('./GMM/GMEcollars_002_res90_2020-09-06.rds')
+movdat.filter <- readRDS('./GMM/movdata/GMEcollars_003_res90_2020-10-30.rds')
 
 # dataframe for fitting - add custom filters here as needed
 df <- movdat.filter 
@@ -154,6 +154,8 @@ clust.result <- result %>%
 ##### Model validation #####
 ### CV and consistency evaluation
 
+set.seed(401)
+
 # Mean
 train.err.1 <- NULL
 test.err.1 <- NULL
@@ -244,7 +246,10 @@ mean(test.err.3) # cannot get CV error directly for bivariate
 {outfile <- paste0("./GMM/results/clustResult_GME_", Sys.Date(), ".csv")
   write.csv(clust.result, outfile)}
 
+{outfile <- paste0("./GMM/results/clustResult_GME_", Sys.Date(), ".rds")
+  saveRDS(clust.result, outfile)}
 
-saveRDS(m1, './GMM/results/mSelect_2020-07-14.rds')
+# save top model for further analysis
+saveRDS(m1, paste0('./GMM/results/mSelect_', Sys.Date(), '.rds'))
 
 
