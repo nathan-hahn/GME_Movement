@@ -1,4 +1,6 @@
-## Gaussian Mixture Model clustering by roll.max
+###### Gaussian Mixture Model clustering #####
+# Tactic cluster fitting and evaluation using GMMs in the mclust package
+# Final output stored as a result file and tactic cluster IDs added to the tracking data
 
 library(ggplot2)
 theme_set(theme_bw() + theme(panel.border = element_rect(), panel.grid.major = element_blank(),
