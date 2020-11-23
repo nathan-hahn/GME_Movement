@@ -18,6 +18,8 @@ library(lubridate)
 library(xts)
 library(zoo)
 library(momentuHMM)
+library(DescTools)
+library(adehabitatLT)
 
 source('GME_functions.R')
 
@@ -60,16 +62,6 @@ system.time({
 output <- do.call("rbind", merge)
 
 #write.csv(output, "./HMM/model results/agWindow_temporary_df.csv")
-
-# ag window stats
-output %>%
-  group_by(tactic.season, ag.window) %>%
-  summarise(n = n())
-
-output$t <- output$ag.window - lag(output$ag.window)
-
-output$window.start <- ifelse(output$ag.window - lag(output$ag.window) == 1, 1, 0)
-output$window.start <- ifelse(output$ag.window - lag(output$ag.window) == -1, 1, output$ag.window)
 
 
 ##### Activity Budgets #####
@@ -491,7 +483,7 @@ t <- output.plot %>%
 t$prop <- t$n/sum(t$n)
 t
 
-## Ag Window Stats
+##### Ag Window Stats #####
 t <- output.plot %>%
   group_by(ag.window) %>%
   summarise(n = n(),
@@ -505,3 +497,75 @@ t
 
 median(output$dist2agedge)
 IQR(output$dist2agedge)
+
+## Movement
+ag.mov <- output %>%
+  filter(!(is.na(ag.window)) & !(is.na(dist))) %>%
+  group_by(tactic.season, ag.window) %>%
+  summarise(n = n(),
+            mean.dist = mean(dist, na.rm = TRUE),
+            sd = sd(dist),
+            me = qt(.95,9)*sd(dist)/sqrt(n),
+            lwr.ci = mean.dist - me,
+            upr.ci = mean.dist + me)
+
+ag.mov
+
+# plot
+ggplot(ag.mov, aes(x = tactic.season, y = mean.dist, color = ag.window)) + 
+  geom_pointrange(aes(ymin = lwr.ci, ymax = upr.ci)) 
+xlab("Tactic-Season") + ylab("Cummulative Distance") + labs(color = "Sex")
+
+
+## Cumm Displacement 
+# Do individuals in different tactics move more within a year? 
+library(adehabitatLT)
+
+output$indiv.year <- paste(output$subject_name, output$year.cuts, sep = '-')
+xy <- cbind(output$x, output$y)
+
+# make trajectories by individual-year
+traj <- as.ltraj(xy, output$date, id = output$indiv.year)
+traj.df <- ld(traj)
+
+output$R2n.indiv.year <- traj.df$R2n
+
+# cumm displacement by indiv-year
+cum.disp <- output %>%
+  group_by(indiv.year, tactic.season) %>%
+  summarise(n = n(),
+            cumm.disp = sum(sqrt(R2n.indiv.year))) %>%
+  group_by(tactic.season) %>%
+  summarise(n = n(),    
+            mean.cumm.disp = mean(cumm.disp),
+            me = qt(.95,9)*sd(cumm.disp)/sqrt(n),
+            lwr.ci = mean.cumm.disp - me,
+            upr.ci = mean.cumm.disp + me)
+
+cum.disp
+
+ggplot(cum.disp, aes(x = tactic.season, y = mean.cumm.disp)) + 
+  geom_pointrange(aes(ymin = lwr.ci, ymax = upr.ci)) 
+xlab("Tactic-Season") + ylab("Cummulative Displacement")
+
+
+# cumm distance by indiv-year
+cum.dist <- output %>%
+  filter(!is.na(dist)) %>%
+  group_by(indiv.year, tactic.season) %>%
+  summarise(n = n(),
+            cumm.dist = sum(dist)) %>%
+  group_by(tactic.season) %>%
+  summarise(n = n(),    
+            mean.cumm.dist = mean(cumm.dist),
+            me = qt(.95,9)*sd(cumm.dist)/sqrt(n),
+            lwr.ci = mean.cumm.dist - me,
+            upr.ci = mean.cumm.dist + me)
+
+cum.dist
+
+ggplot(cum.dist, aes(x = tactic.season, y = mean.cumm.dist)) + 
+  geom_pointrange(aes(ymin = lwr.ci, ymax = upr.ci)) +
+xlab("Tactic-Season") + ylab("Cummulative Distance")
+
+
