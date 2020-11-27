@@ -498,10 +498,11 @@ t
 median(output$dist2agedge)
 IQR(output$dist2agedge)
 
-## Movement
+### Speed
+# speed in and outside of ag
 ag.mov <- output %>%
   filter(!(is.na(ag.window)) & !(is.na(dist))) %>%
-  group_by(tactic.season, ag.window) %>%
+  group_by(ag.window) %>%
   summarise(n = n(),
             mean.dist = mean(dist, na.rm = TRUE),
             sd = sd(dist),
@@ -512,60 +513,68 @@ ag.mov <- output %>%
 ag.mov
 
 # plot
-ggplot(ag.mov, aes(x = tactic.season, y = mean.dist, color = ag.window)) + 
+ggplot(ag.mov, aes(x = factor(ag.window), y = mean.dist, color = ag.window)) + 
   geom_pointrange(aes(ymin = lwr.ci, ymax = upr.ci)) 
 xlab("Tactic-Season") + ylab("Cummulative Distance") + labs(color = "Sex")
 
 
-## Cumm Displacement 
+##### Daily Displacement - Regression #####
 # Do individuals in different tactics move more within a year? 
-library(adehabitatLT)
 
-output$indiv.year <- paste(output$subject_name, output$year.cuts, sep = '-')
-xy <- cbind(output$x, output$y)
+## Mean and stdev of cummulative daily distance moved (displacement)
+# get daily aggregate stats on movement
+output$ymd <- as.Date(output$date, "%Y/%m/%d")
+stat <- function(x) c(sum = sum(x))
+ag.daily <- as.data.frame(aggregate(dist ~ ymd + subject_name, output, stat)) # aggregated stats by day
 
-# make trajectories by individual-year
-traj <- as.ltraj(xy, output$date, id = output$indiv.year)
-traj.df <- ld(traj)
+# bind daily displacment to full dataset
+displacement <- inner_join(output, ag.daily, by = c("ymd", "subject_name")) %>%
+  rename(daily.disp = dist.y)
 
-output$R2n.indiv.year <- traj.df$R2n
-
-# cumm displacement by indiv-year
-cum.disp <- output %>%
-  group_by(indiv.year, tactic.season) %>%
-  summarise(n = n(),
-            cumm.disp = sum(sqrt(R2n.indiv.year))) %>%
+# summarise by tactic - mean daily displacement
+displacement %>%
+  filter(!is.na(ag.window)) %>%
   group_by(tactic.season) %>%
-  summarise(n = n(),    
-            mean.cumm.disp = mean(cumm.disp),
-            me = qt(.95,9)*sd(cumm.disp)/sqrt(n),
-            lwr.ci = mean.cumm.disp - me,
-            upr.ci = mean.cumm.disp + me)
-
-cum.disp
-
-ggplot(cum.disp, aes(x = tactic.season, y = mean.cumm.disp)) + 
-  geom_pointrange(aes(ymin = lwr.ci, ymax = upr.ci)) 
-xlab("Tactic-Season") + ylab("Cummulative Displacement")
-
-
-# cumm distance by indiv-year
-cum.dist <- output %>%
-  filter(!is.na(dist)) %>%
-  group_by(indiv.year, tactic.season) %>%
   summarise(n = n(),
-            cumm.dist = sum(dist)) %>%
-  group_by(tactic.season) %>%
-  summarise(n = n(),    
-            mean.cumm.dist = mean(cumm.dist),
-            me = qt(.95,9)*sd(cumm.dist)/sqrt(n),
-            lwr.ci = mean.cumm.dist - me,
-            upr.ci = mean.cumm.dist + me)
+            mean = mean(daily.disp, na.rm = TRUE),
+            sd = sd(daily.disp, na.rm = TRUE))
 
-cum.dist
+## Regression
+# Test if mean daily displacement is different between tactics using individual-years
+library(lme4)
 
-ggplot(cum.dist, aes(x = tactic.season, y = mean.cumm.dist)) + 
-  geom_pointrange(aes(ymin = lwr.ci, ymax = upr.ci)) +
-xlab("Tactic-Season") + ylab("Cummulative Distance")
+# create dataset for regression
+mov <- displacement %>%
+  filter(!is.na(ag.window)) %>%
+  mutate(tactic.season = as.factor(tactic.season)) %>%
+  group_by(subject_name, tactic.season) %>%
+  summarise(n = n(),
+            mean = mean(daily.disp, na.rm = TRUE),
+            sd = sd(daily.disp, na.rm = TRUE))
+
+mov
+
+mov$mean.log <- log(mov$mean)
+
+mov$tactic.season <- relevel(mov$tactic.season, ref = '4')
+
+# Fit
+# interpretation: with habitual as the reference level, the other tactics have significantly lower daily displacement
+m.mov <- lmer(mean ~ factor(tactic.season) + (1|subject_name), data = mov, REML = FALSE)
+summary(m.mov)
+confint(m.mov)
+
+sjPlot::tab_model(m.mov)
+
+# check resids - ok
+plot(m.mov)
 
 
+# Fit with dummy vars -- SAME
+mov$low <- ifelse(mov$tactic.season == '1', 1, 0)
+mov$sporadic <- ifelse(mov$tactic.season == '2', 1, 0)
+mov$seasonal <- ifelse(mov$tactic.season == '3', 1, 0)
+
+m.dum <- lmer(mean ~ factor(low) + factor(sporadic) + factor(seasonal) + (1|subject_name), data = mov, REML = FALSE)
+summary(m.dum)
+confint(m.dum)
