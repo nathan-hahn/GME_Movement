@@ -210,8 +210,11 @@ mean(train.err.3)
 
 # CROSS VALIDATION RESULTS
 mean(cv.1)
+sd(cv.1)
 mean(cv.2)
+sd(cv.2)
 mean(test.err.3) 
+sd(test.err.3)
 
 
 ##### Export #####
