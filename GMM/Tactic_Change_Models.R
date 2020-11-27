@@ -79,7 +79,7 @@ change <- amplitude %>%
 ## Tactic Change Rates
 
 change.sum <- change %>% 
-  filter(subject_name %in% indv.change$subject_name) %>%
+  filter(subject_name %in% change$subject_name) %>%
   group_by(tactic.season) %>%
   summarise(year.n = length(year.cuts),
             change = sum(tactic.change)/year.n,
