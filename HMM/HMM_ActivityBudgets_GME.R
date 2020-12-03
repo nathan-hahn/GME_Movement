@@ -531,13 +531,6 @@ ag.daily <- as.data.frame(aggregate(dist ~ ymd + subject_name, output, stat)) # 
 displacement <- inner_join(output, ag.daily, by = c("ymd", "subject_name")) %>%
   rename(daily.disp = dist.y)
 
-# summarise by tactic - mean daily displacement
-displacement %>%
-  filter(!is.na(ag.window)) %>%
-  group_by(tactic.season) %>%
-  summarise(n = n(),
-            mean = mean(daily.disp, na.rm = TRUE),
-            sd = sd(daily.disp, na.rm = TRUE))
 
 ## Regression
 # Test if mean daily displacement is different between tactics using individual-years
@@ -547,16 +540,14 @@ library(lme4)
 mov <- displacement %>%
   filter(!is.na(ag.window)) %>%
   mutate(tactic.season = as.factor(tactic.season)) %>%
-  group_by(subject_name, tactic.season) %>%
+  group_by(subject_name, year.cuts, tactic.season) %>%
   summarise(n = n(),
             mean = mean(daily.disp, na.rm = TRUE),
             sd = sd(daily.disp, na.rm = TRUE))
 
 mov
 
-mov$mean.log <- log(mov$mean)
-
-mov$tactic.season <- relevel(mov$tactic.season, ref = '4')
+mov$tactic.season <- relevel(mov$tactic.season, ref = '1')
 
 # Fit
 # interpretation: with habitual as the reference level, the other tactics have significantly lower daily displacement
@@ -568,6 +559,9 @@ sjPlot::tab_model(m.mov)
 
 # check resids - ok
 plot(m.mov)
+
+dat <- ggpredict(m.mov, terms = c("tactic.season"))
+plot(dat)
 
 
 # Fit with dummy vars -- SAME
