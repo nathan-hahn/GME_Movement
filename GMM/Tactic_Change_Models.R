@@ -34,6 +34,20 @@ for(i in 1:length(split)){
 mcp.areas <- do.call(rbind, split.area)
 movdata$year.mcp.area <- mcp.areas@data$year.mcp.area
 
+## Calculate mean daily displacement
+movdata$ymd <- as.Date(movdata$date, "%Y/%m/%d")
+stat <- function(x) c(sum = sum(x))
+ag.daily <- as.data.frame(aggregate(dist ~ ymd + subject_name, movdata, stat)) # aggregated stats by day
+
+# bind daily displacment to full dataset
+displacement <- inner_join(movdata, ag.daily, by = c("ymd", "subject_name")) %>%
+  rename(daily.disp = dist.y) %>%
+  mutate(tactic.season = as.integer(tactic.season), year.cuts = as.character(year.cuts)) %>%
+  group_by(subject_name, year.cuts, tactic.season) %>%
+  summarise(mu.daily.disp = mean(daily.disp, na.rm = TRUE))
+
+movdata <- inner_join(movdata, displacement, by = c("subject_name", "year.cuts", "tactic.season"))
+
 
 ##### Cut Points #####
 # get cutpoints of the GMM to calculate duration over thresholds
@@ -57,7 +71,7 @@ amplitude <- movdata %>%
          year.begin = min(date),
          year.end = max(date)) %>%
   group_by(subject_name, tactic.agg, site, year.cuts, tactic.season, year.begin, year.end, year.mean, year.max, year.min, year.amp, duration,
-           year.mcp.area, subject_sex, subject_ageClass) %>%
+           year.mcp.area, mu.daily.disp, subject_sex, subject_ageClass) %>%
   # filter to individual years with at least 1 month's worth of fixes (does not account for NAs)
   tally() %>% filter(n > 500) %>% droplevels()
 #View(amplitude)
@@ -126,14 +140,14 @@ mod.df <- change.df %>%
   mutate(subject_ageClass = recode_factor(subject_ageClass, 
                                           "adult" = "young adult",
                                           "mature" = "old adult")) %>%
-  dplyr::select(subject_name, tactic.change, subject_sex, subject_ageClass, year.mcp.area, tactic.season, tactic.prev) %>%
+  dplyr::select(subject_name, tactic.change, subject_sex, subject_ageClass, year.mcp.area, mu.daily.disp, tactic.season, tactic.prev) %>%
   
   # drop years with no previous tactic (first years)
-  drop_na() %>% droplevels() %>%
+  drop_na() %>% droplevels() 
   
   # normalize homerange data
-  mutate(year.mcp.area = (year.mcp.area - min(year.mcp.area))/
-           (max(year.mcp.area) - min(year.mcp.area)))
+  #mutate(year.mcp.area = (year.mcp.area - min(year.mcp.area))/
+   #        (max(year.mcp.area) - min(year.mcp.area)))
 
 
 # fit models
@@ -142,12 +156,16 @@ m2 <- glmer(tactic.change ~ tactic.prev + subject_sex + subject_ageClass + (1|su
 m3 <- glmer(tactic.change ~ tactic.prev + (1|subject_name), data = mod.df, family = 'binomial')
 m4 <- glmer(tactic.change ~ subject_sex + subject_ageClass + (1|subject_name), data = mod.df, family = 'binomial')
 m5 <- glmer(tactic.change ~ subject_sex*subject_ageClass + (1|subject_name), data = mod.df, family = 'binomial')
-m6 <- glmer(tactic.change ~ subject_sex*subject_ageClass + year.mcp.area + (1|subject_name), data = mod.df, family = 'binomial')
-m7 <- glmer(tactic.change ~ subject_sex*subject_ageClass + year.mcp.area + tactic.prev + (1|subject_name), data = mod.df, family = 'binomial')
-m8 <- glmer(tactic.change ~ year.mcp.area + tactic.prev + (1|subject_name), data = mod.df, family = 'binomial')
-
+m6 <- glmer(tactic.change ~ subject_sex*subject_ageClass + log(year.mcp.area) + (1|subject_name), data = mod.df, family = 'binomial')
+m7 <- glmer(tactic.change ~ subject_sex*subject_ageClass + log(year.mcp.area) + tactic.prev + (1|subject_name), data = mod.df, family = 'binomial')
+m8 <- glmer(tactic.change ~ log(year.mcp.area) + tactic.prev + (1|subject_name), data = mod.df, family = 'binomial')
+m9 <- glmer(tactic.change ~ subject_sex*subject_ageClass + log(mu.daily.disp) + (1|subject_name), data = mod.df, family = 'binomial')
+m10 <- glmer(tactic.change ~ subject_sex*subject_ageClass + log(mu.daily.disp) + log(year.mcp.area) + (1|subject_name), 
+             data = mod.df, family = 'binomial')
 # AIC table w/ likelihoods
-aicc <- AICc(m1, m2, m3, m4, m5, m6, m7, m8)
+knitr::kable(AICc(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10))
+
+aicc <- AICc(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10)
 
 mods <- list(m1, m2, m3, m4, m5, m6, m7, m8)
 t <- lapply(mods, logLik)
