@@ -255,7 +255,8 @@ clust.df <- do.call(rbind, result) %>%
   ungroup() %>%
   dplyr::select(subject_name, year.cuts, tactic.season = ag.class.year) %>%
   inner_join(., agg.clust, by = c("subject_name", "year.cuts")) %>%
-  as.data.frame()
+  mutate(year.cuts = as.factor(year.cuts), tactic.season = as.factor(tactic.season)) %>%
+  as.data.frame() 
 
 
 ##### Save Tables #####
@@ -266,4 +267,79 @@ write.csv(tactics.site, './GMM/results/cluster tables/tactics_site.csv')
 write.csv(tactics.region, './GMM/results/cluster tables/tactics_region.csv')
 saveRDS(clust.df, './GMM/movdata/GMEcollars_003_usedClust_2020-10-30.rds')
 
+##### Mean Ag Use Regression #####
+## Build homeranges for each individual-year and extract the areas
+library(adehabitatLT)
+# prep spdf
+t <-  filter(clust.df, !is.na(x)) %>%
+  dplyr::select(x, y, subject_name, year.cuts) 
+coordinates(t) <-~x+y
+
+# build MCP's by individual + year
+split <- split(t, list(t$subject_name, t$year.cuts), drop = TRUE)
+mcp <- lapply(split, mcp)
+
+# extract areas and attach to movdata
+split.area <- list()
+for(i in 1:length(split)){
+  split.area[[i]] <- cbind(split[[i]], newcol = mcp[[i]]$area)
+  colnames(split.area[[i]]@data) <- c("subject_name", "year.cuts", "year.mcp.area")
+}
+mcp.areas <- do.call(rbind, split.area)
+clust.df$year.mcp.area <- mcp.areas@data$year.mcp.area
+
+## Calculate mean daily displacement
+clust.df$ymd <- as.Date(clust.df$date, "%Y/%m/%d")
+stat <- function(x) c(sum = sum(x))
+ag.daily <- as.data.frame(aggregate(dist ~ ymd + subject_name, clust.df, stat)) # aggregated stats by day
+
+# bind daily displacment to full dataset
+displacement <- inner_join(clust.df, ag.daily, by = c("ymd", "subject_name")) %>%
+  rename(daily.disp = dist.y) %>%
+  mutate(tactic.season = as.factor(tactic.season), year.cuts = as.factor(year.cuts)) %>%
+  group_by(subject_name, year.cuts, tactic.season) %>%
+  summarise(mu.daily.disp = mean(daily.disp, na.rm = TRUE))
+
+output <- inner_join(clust.df, displacement, by = c("subject_name", "year.cuts", "tactic.season"))
+
+## Model Fit
+# prep dataframe
+mod.df <- output %>%
+  group_by(subject_name, year.cuts, tactic.season, subject_sex, subject_ageClass, year.mcp.area, mu.daily.disp) %>%
+  summarise(year.mean = mean(ag.used))
+  
+mod.df$subject_sex <- as.factor(mod.df$subject_sex) # females as reference level
+mod.df$subject_ageClass <- as.factor(mod.df$subject_ageClass) 
+mod.df$subject_ageClass <- relevel(mod.df$subject_ageClass, ref = "young adult") # young adults as reference level
+
+m1 <- lmer(year.mean ~ subject_sex + subject_ageClass + log(year.mcp.area) + (1|subject_name), data = mod.df, REML = FALSE)
+#summary(m1)
+
+m2 <- lmer(year.mean ~ subject_sex + subject_ageClass + (1|subject_name), data = mod.df, REML = FALSE)
+#summary(m2)
+
+m3 <- lmer(year.mean ~ subject_sex + log(year.mcp.area) + (1|subject_name), data = mod.df, REML = FALSE)
+#summary(m3)
+
+m3.disp <- lmer(year.mean ~ subject_sex + log(year.mcp.area) + log(mu.daily.disp) + (1|subject_name), data = mod.df, REML = FALSE)
+#summary(m3.disp)
+
+m4 <- lmer(year.mean ~ subject_sex + (1|subject_name), data = mod.df, REML = FALSE)
+#summary(m4)
+
+m5 <- lmer(year.mean ~ subject_ageClass + (1|subject_name), data = mod.df, REML = FALSE)
+#summary(m5)
+
+m6 <- lmer(year.mean ~ (1|subject_name), data = mod.df, REML = FALSE)
+#summary(m6)
+
+# AICc table
+knitr::kable(AICc(m1, m2, m3, m3.disp, m4, m5, m6))
+
+# regression table for top model
+sjPlot::tab_model(m3.disp)
+
+# plot outputs
+dat <- ggpredict(m3.disp, terms = c("year.mcp.area"))
+plot(dat)
 
