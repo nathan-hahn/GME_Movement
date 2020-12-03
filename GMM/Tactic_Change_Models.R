@@ -108,7 +108,7 @@ change.df <- amplitude %>%
   mutate(tactic.prev = lag(tactic.season)) %>%
   mutate(tactic.change = if_else(tactic.season != dplyr::lag(tactic.season), 1, 0)) %>%
   mutate(tactic.direction = tactic.season - dplyr::lag(tactic.season)) %>%
-  dplyr::select(subject_name, year.cuts, tactic.season, tactic.prev, tactic.change, tactic.direction) %>%
+  #dplyr::select(subject_name, year.cuts, tactic.season, tactic.prev, tactic.change, tactic.direction) %>%
   #drop_na() %>%
   droplevels()
 
@@ -118,17 +118,17 @@ library(lme4)
 library(nnet)
 library(MuMIn)
 
-mod.df <- amplitude %>%
+mod.df <- change.df %>%
   ungroup() %>%
   
-  # add tactic change info
-  mutate(tactic.prev = change.df$tactic.prev, tactic.change = change.df$tactic.change) %>%
+  # format vectors
   mutate_at(c("tactic.prev", "tactic.change", "tactic.season", "subject_sex", "subject_ageClass"), as.factor) %>%
   mutate(subject_ageClass = recode_factor(subject_ageClass, 
                                           "adult" = "young adult",
                                           "mature" = "old adult")) %>%
-  filter(subject_name %in% indv.change$subject_name) %>%
   dplyr::select(subject_name, tactic.change, subject_sex, subject_ageClass, year.mcp.area, tactic.season, tactic.prev) %>%
+  
+  # drop years with no previous tactic (first years)
   drop_na() %>% droplevels() %>%
   
   # normalize homerange data
