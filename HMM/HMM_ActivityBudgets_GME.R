@@ -107,6 +107,7 @@ ag.budget <- t %>%
   #                                 '0' = 'out-ag',
   #                                 '1' = 'in-ag')) %>%
   rename(tactic = tactic.season) %>%
+  # jitter rare tactic to avoid overlap with other props
   mutate(prop_j = ifelse(tactic == 'Rare', prop + 0.002, prop),
          lwr.ci_j = ifelse(tactic == 'Rare', lwr.ci + 0.002, prop),
          upr.ci_j = ifelse(tactic == 'Rare', upr.ci + 0.002, prop))
@@ -114,8 +115,6 @@ ag.budget <- t %>%
 
 
 # plot w/ CIs
-#ag.budget$prop_j <- ag.budget$prop + runif(1, min = -0.01, max = 0.01)
-#pd <- position_dodge(0.01)
 ggplot(ag.budget, aes(x = as.factor(ag.window), y = prop_j, group = tactic)) + 
   geom_pointrange(aes(ymin = lwr.ci_j, ymax = upr.ci_j, color = tactic)) + 
   xlab("Tactic class") + ylab("Proportion") +
