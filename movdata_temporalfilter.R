@@ -25,3 +25,10 @@ max(downsampled$date)
 
 saveRDS(downsampled, paste0("./movdata/GMEcollars_003_usedFilter_", Sys.Date(),".rds"))
 
+# general mov stats using filtered data
+downsampled %>% mutate(ag.used = ifelse(lc.estes == 1, 1, 0)) %>%
+  summarise(mean(ag.used))
+
+t <- downsampled %>% group_by(subject_name, subject_sex, subject_ageClass) %>% tally()
+table(t$subject_sex)
+
