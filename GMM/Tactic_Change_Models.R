@@ -115,6 +115,26 @@ ggplot(change.sum, aes(factor(tactic.season), change)) + geom_pointrange(
   aes(ymin = lwr, ymax = upr)) + 
   xlab("Tactic Class") + ylab("Tactic Change Rate")
 
+# plot by sex
+change.sex <- change %>% 
+  filter(subject_name %in% change$subject_name) %>%
+  group_by(tactic.season, subject_sex) %>%
+  summarise(year.n = length(year.cuts),
+            change = sum(tactic.change)/year.n,
+            sd = sd(tactic.change),
+            se = sd/sqrt(year.n),
+            lwr = change - se,
+            upr = change + se) %>%
+  mutate(tactic.season = recode_factor(as.factor(tactic.season),
+                                       "1" = "Rare",
+                                       "2" = "Sporadic",
+                                       "3" = "Seasonal",
+                                       "4" = "Habitual"))
+
+# plot
+ggplot(change.sex, aes(factor(tactic.season), change, color = subject_sex)) + geom_pointrange(
+  aes(ymin = lwr, ymax = upr), position = position_dodge(0.4)) + 
+  xlab("Tactic Class") + ylab("Tactic Change Rate")
 
 # store tactic change info 
 change.df <- amplitude %>%
