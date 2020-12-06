@@ -38,6 +38,7 @@ output <- cbind(output, df)
 # create new varibles to differentiate ag and non-ag in non-protected areas
 output$ag.used <- ifelse(output$lc.estes == 1, 1, 0)
 output$pa <- factor(output$pa, levels = c(3:1))
+
 # 4 is ag in non-protected areas
 output$pa.2 <- ifelse(output$pa == 1 & output$ag.used == 1, 4, output$pa)
 
@@ -61,7 +62,7 @@ system.time({
 
 output <- do.call("rbind", merge)
 
-#write.csv(output, "./HMM/model results/agWindow_temporary_df.csv")
+#write.csv(output, "./HMM/movdata/GMEcollars_003_HMMclassified_20201206.csv")
 
 
 ##### Activity Budgets #####
@@ -102,18 +103,24 @@ ag.budget <- t %>%
          lwr.ci = MultinomCI(n, conf.level = 0.95, sides = 'two.sided')[,2],
          upr.ci = MultinomCI(n, conf.level = 0.95, sides = 'two.sided')[,3],
   ) %>%
-  mutate(ag.window = recode_factor(ag.window,
-                                   '0' = 'out-ag',
-                                   '1' = 'in-ag')) %>%
-  rename(tactic = tactic.season)
+  #mutate(ag.window = recode_factor(ag.window,
+  #                                 '0' = 'out-ag',
+  #                                 '1' = 'in-ag')) %>%
+  rename(tactic = tactic.season) %>%
+  mutate(prop_j = ifelse(tactic == 'Rare', prop + 0.002, prop),
+         lwr.ci_j = ifelse(tactic == 'Rare', lwr.ci + 0.002, prop),
+         upr.ci_j = ifelse(tactic == 'Rare', upr.ci + 0.002, prop))
 
 
 
 # plot w/ CIs
-ggplot(ag.budget, aes(x = as.factor(ag.window), y = prop, group = tactic)) + 
-  geom_pointrange(aes(ymin = lwr.ci, ymax = upr.ci, color = tactic)) + xlab("Tactic class") + ylab("Proportion") +
+#ag.budget$prop_j <- ag.budget$prop + runif(1, min = -0.01, max = 0.01)
+#pd <- position_dodge(0.01)
+ggplot(ag.budget, aes(x = as.factor(ag.window), y = prop_j, group = tactic)) + 
+  geom_pointrange(aes(ymin = lwr.ci_j, ymax = upr.ci_j, color = tactic)) + 
+  xlab("Tactic class") + ylab("Proportion") +
   geom_line(aes(color = tactic), linetype = "dashed") + 
-  facet_wrap(.~viterbi) + ylab("% time spent in state") + xlab("ag bout")
+  facet_wrap(.~viterbi) + ylab("% time spent in state") + xlab("ag use phase")
 
 # spread and get absolute differences between movement phases
 t <- spread(ag.budget, key = ag.window, value = pct)
