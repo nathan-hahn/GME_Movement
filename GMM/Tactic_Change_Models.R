@@ -44,7 +44,9 @@ displacement <- inner_join(movdata, ag.daily, by = c("ymd", "subject_name")) %>%
   rename(daily.disp = dist.y) %>%
   mutate(tactic.season = as.integer(tactic.season), year.cuts = as.character(year.cuts)) %>%
   group_by(subject_name, year.cuts, tactic.season) %>%
-  summarise(mu.daily.disp = mean(daily.disp, na.rm = TRUE))
+  summarise(mu.daily.disp = mean(daily.disp, na.rm = TRUE)) %>%
+  group_by(subject_name) %>%
+  mutate(m.lag = dplyr::lag(mu.daily.disp, n = 1)) 
 
 movdata <- inner_join(movdata, displacement, by = c("subject_name", "year.cuts", "tactic.season"))
 
@@ -71,7 +73,7 @@ amplitude <- movdata %>%
          year.begin = min(date),
          year.end = max(date)) %>%
   group_by(subject_name, tactic.agg, site, year.cuts, tactic.season, year.begin, year.end, year.mean, year.max, year.min, year.amp, duration,
-           year.mcp.area, mu.daily.disp, subject_sex, subject_ageClass) %>%
+           year.mcp.area, mu.daily.disp, subject_sex, subject_ageClass, m.lag) %>%
   # filter to individual years with at least 1 month's worth of fixes (does not account for NAs)
   tally() %>% filter(n > 500) %>% droplevels()
 #View(amplitude)
@@ -118,18 +120,18 @@ ggplot(change.sum, aes(factor(tactic.season), change)) + geom_pointrange(
 # plot by sex
 change.sex <- change %>% 
   filter(subject_name %in% change$subject_name) %>%
-  group_by(tactic.season, subject_sex) %>%
+  group_by(subject_sex) %>%
   summarise(year.n = length(year.cuts),
             change = sum(tactic.change)/year.n,
             sd = sd(tactic.change),
             se = sd/sqrt(year.n),
             lwr = change - se,
-            upr = change + se) %>%
-  mutate(tactic.season = recode_factor(as.factor(tactic.season),
-                                       "1" = "Rare",
-                                       "2" = "Sporadic",
-                                       "3" = "Seasonal",
-                                       "4" = "Habitual"))
+            upr = change + se) #%>%
+  #mutate(tactic.season = recode_factor(as.factor(tactic.season),
+  #                                     "1" = "Rare",
+  #                                     "2" = "Sporadic",
+  #                                     "3" = "Seasonal",
+  #                                     "4" = "Habitual"))
 
 # plot
 ggplot(change.sex, aes(factor(tactic.season), change, color = subject_sex)) + geom_pointrange(
@@ -146,7 +148,7 @@ change.df <- amplitude %>%
   #drop_na() %>%
   droplevels()
 
-## Are environmental variables or ele characteristics driving tactic choice? 
+## Are ele characteristics driving tactic choice? 
 ## Model the current years tactic as a function of prev. year tactic, peak NDVI, home range, ageClass, sex
 library(lme4)
 library(nnet)
@@ -160,7 +162,7 @@ mod.df <- change.df %>%
   mutate(subject_ageClass = recode_factor(subject_ageClass, 
                                           "adult" = "young adult",
                                           "mature" = "old adult")) %>%
-  dplyr::select(subject_name, tactic.change, subject_sex, subject_ageClass, year.mcp.area, mu.daily.disp, tactic.season, tactic.prev) %>%
+  dplyr::select(subject_name, tactic.change, subject_sex, subject_ageClass, year.mcp.area, mu.daily.disp, m.lag, tactic.season, tactic.prev) %>%
   
   # drop years with no previous tactic (first years)
   drop_na() %>% droplevels() 
@@ -186,13 +188,13 @@ m10 <- glmer(tactic.change ~ subject_sex*subject_ageClass + log(mu.daily.disp) +
 knitr::kable(AICc(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10))
 
 aicc <- AICc(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10)
-
-mods <- list(m1, m2, m3, m4, m5, m6, m7, m8)
+mods <- list(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10)
 t <- lapply(mods, logLik)
 t <- do.call(rbind, t)
 
 AIC.table <- cbind(aicc, t)
-AIC.table
+AIC.table %>% arrange(AICc)
+
 
 # coeff + CIs for top model
 summary(m6)
