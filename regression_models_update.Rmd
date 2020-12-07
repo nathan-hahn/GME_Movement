@@ -107,9 +107,24 @@ m5 <- lmer(year.mean ~ subject_ageClass + (1|subject_name), data = mod.df, REML 
 
 m6 <- lmer(year.mean ~ (1|subject_name), data = mod.df, REML = FALSE)
 
-knitr::kable(AICc(m1, m2, m3, m4, m5, m6))
+m7 <- lmer(year.mean ~ log(year.mcp.area) + (1|subject_name), data = mod.df, REML = FALSE)
 
-sjPlot::tab_model(m3)
+m8 <- lmer(year.mean ~ log(mu.daily.disp) + (1|subject_name), data = mod.df, REML = FALSE)
+
+m9 <- lmer(year.mean ~ log(mu.daily.disp) + log(year.mcp.area) + (1|subject_name), data = mod.df, REML = FALSE)
+
+knitr::kable(AICc(m1, m2, m3, m4, m5, m6, m7, m8, m9))
+
+sjPlot::tab_model(m9)
+
+# mod selection table
+aicc <- AICc(m1, m2, m3, m4, m5, m6, m7, m8, m9)
+mods <- list(m1, m2, m3, m4, m5, m6, m7, m8, m9)
+t <- lapply(mods, logLik)
+t <- do.call(rbind, t)
+
+AIC.table <- cbind(aicc, t)
+AIC.table %>% arrange(AICc)
 ```
 
 Looking at residual plots, the model assumptions may be iffy. Residuals are clustered tightly at low levels of ag use, and then quickly disperse. 
