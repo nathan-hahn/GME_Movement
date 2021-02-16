@@ -17,8 +17,8 @@ library(ggplot2, warn.conflicts = FALSE, quietly = TRUE)
 source("./GME_functions.R")
 
 # GME movement data - 2019
-gme <- readRDS("./GMM/GMEcollars_002_usedClust_2020-07-14.rds")
-#stack <- readRDS("./spatial data/GME_rasterStack_20200602.rds")
+gme <- readRDS("./GMM/movdata/GMEcollars_003_usedClust_2020-10-30.rds")
+stack <- readRDS("./spatial data/GME_rasterStack_20200602.rds")
 
 
 #' ### Build homeranges
@@ -48,31 +48,55 @@ system.time(
   mcp.rast <- lapply(mcp, mask_poly_raster, raster = stack$change03_181_reclassMara_2019.11.22)
 )
 
+
+# proportion of ag
+p.rast <- function(r) {
+  f <- freq(r, value = 1) 
+  t <- sum(freq(r)[,2])
+  p <- as.numeric(f/t)
+  return(p)
+}
+
+props <- lapply(mcp.rast, p.rast)
+
+# add relevant metadata to each list element
+t <- gme %>% group_by(subject_name, year.cuts, tactic.season) %>% tally() %>%
+  mutate(year.id = paste0(subject_name, tactic.season, sep = '.'))
+l <- Map(cbind, props, year.id = names(props), ag.class = t$tactic.season)
+# create metrics dataframe
+metrics.df <- as.data.frame(do.call("rbind", l))
+
+
 #' ### Landscape Metrics
 ##### Landscape Metrics #####
 
 # calculate a metric for all individual homeranges
 metrics <- lapply(mcp.rast, lsm_l_contag)
+#metrics <- lapply(mcp.rast, lsm_l_area_mn)
+#metrics <- lapply(mcp.rast, lsm_p_perim)
 
 # add relevant metadata to each list element
-t <- gme %>% group_by(subject_name, ag.class.both) %>% tally() 
-l <- Map(cbind, metrics, subject_name = names(metrics), ag.class = t$ag.class.both)
+t <- gme %>% group_by(subject_name, year.cuts, tactic.season) %>% tally() 
+l <- Map(cbind, metrics, year.id = names(metrics), ag.class = t$tactic.season)
 # create metrics dataframe
-metrics.df <- do.call("rbind", l)
+metrics.df <- as.data.frame(do.call("rbind", l))
+
+
+write.csv(metrics.df, './Range Metrics/ag.contag.20201208.csv')
 
 #' Plots of homeranges with contagion metric results
 #' Yellow = Ag, Green = Natural Habitat
-par(mfrow = c(2,2))
-cuts = c(0,1,2,3,4)
-pal = colorRampPalette(c('white', "yellow", "dark green", "dark grey", "grey"))
-plot(mcp.rast$Alina, main = paste0("Sporadic: Alina, cont=", round(metrics$Alina$value, 2)),
-     col = pal(5))
-plot(mcp.rast$Fred, main = paste0("Mixed Seasonal: Fred, cont=", round(metrics$Fred$value,2)),
-     col = pal(5))
-plot(mcp.rast$Kimbizwa, main = paste0("Seasonal: Kimbizwa, cont=", round(metrics$Kimbizwa$value,2)),
-     col = pal(5))
-plot(mcp.rast$Olchoda, main = paste0("Habitual: Olchoda, cont=", round(metrics$Fitz$value, 2)),
-     col = pal(5))
+# par(mfrow = c(2,2))
+# cuts = c(0,1,2,3,4)
+# pal = colorRampPalette(c('white', "yellow", "dark green", "dark grey", "grey"))
+# plot(mcp.rast$Alina, main = paste0("Sporadic: Alina, cont=", round(metrics$Alina$value, 2)),
+#      col = pal(5))
+# plot(mcp.rast$Fred, main = paste0("Mixed Seasonal: Fred, cont=", round(metrics$Fred$value,2)),
+#      col = pal(5))
+# plot(mcp.rast$Kimbizwa, main = paste0("Seasonal: Kimbizwa, cont=", round(metrics$Kimbizwa$value,2)),
+#      col = pal(5))
+# plot(mcp.rast$Olchoda, main = paste0("Habitual: Olchoda, cont=", round(metrics$Fitz$value, 2)),
+#      col = pal(5))
 
 #' ### ANOVA
 #' Looked at 5 metrics. Many had issues meeting the variance assumption due to the small sample size of the 
@@ -91,9 +115,11 @@ plot(mcp.rast$Olchoda, main = paste0("Habitual: Olchoda, cont=", round(metrics$F
 summary <- metrics.df %>%
   group_by(ag.class) %>%
   summarise(n = n(),
-            contagion.median = median(value),
-            contagion.sd = sd(value))
+            median = median(value, na.rm = TRUE),
+            sd = sd(value, na.rm = TRUE))
 (summary)
+
+
 
 
 # ANOVA
