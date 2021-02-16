@@ -21,10 +21,17 @@ library(DescTools)
 
 Import individual-year data 
 ```{r}
-# mod.df is the change.df from Tactic_Change_Models.R
-mod.df <- read.csv("./GMM/results/individual_year_classification.csv")
+# mod.df is the change.df from Tactic_Change_Models.R -- 202 individual years after filtering out those with <500 fixes
+#mod.df <- read.csv("./GMM/results/individual_year_classification.csv")
+mod.df <- read.csv('./GMM/results/individual_year_classification 20210216.csv')
 
 output <- readRDS('./GMM/movdata/GMEcollars_003_usedClust_2020-10-30.rds')
+
+ag.prop <- read.csv('./Range Metrics/ag.prop.20201208.csv') %>%
+  dplyr::select(-c(X, ag.class)) %>% rename(ag.prop.hr = V1)
+ag.contag <- read.csv('./Range Metrics/ag.contag.20201208.csv')
+
+ag.prop$contag <- as.numeric(ag.contag$value)
 
 #knitr::kable(head(mod.df))
 ```
@@ -67,6 +74,13 @@ dim(displacement)
 mod.df <- inner_join(mod.df, displacement, by = c("subject_name", "year.cuts", "tactic.season"))
 mod.df <- rename(mod.df, mu.daily.disp = mean)
 
+
+
+## ag prop in homerange
+mod.df$year.id <- paste(mod.df$subject_name, mod.df$year.cuts, sep = '.')
+mod.df <- inner_join(mod.df, ag.prop, by = "year.id")
+
+
 ## Quick summary stats for each covariate
 
 # summary of mcp by tactic class as a proxy for how home range should increase with increasing ag usage
@@ -78,6 +92,8 @@ aggregate(year.mean ~ subject_sex, data = mod.df, FUN = 'mean')
 # summary stats for age class - shows very little difference in use 
 aggregate(year.mean ~ subject_ageClass, data = mod.df, FUN = 'mean')
 
+# centroid distance by mean ag use
+plot(mod.df$year.mean, mod.df$centroid.dist, pch = 19)
 
 ```
 
@@ -87,44 +103,16 @@ Fit models
 
 - In this model, increased home range is associated with increased ag usage; b_hr = `0.042`. Males use more agriculture than females but the difference is not as large as would be expected based on previous research; b_male = `0.026 + 0.035`, b_female = `0.035`
 ```{r}
-m1 <- lmer(year.mean ~ subject_sex + subject_ageClass + log(year.mcp.area) + (1|subject_name), data = mod.df, REML = FALSE)
-#summary(m1)
+mod <- lmer(year.mean ~ subject_sex + log(year.mcp.area) + log(mu.daily.disp) + (1|subject_name), data = mod.df, REML = FALSE)
+#mod <- lmer(year.mean ~ subject_sex + log(year.mcp.area) + log(mu.daily.disp) + log(centroid.dist+0.01) + (1|subject_name), data = mod.df, REML = FALSE)
+summary(mod)
+confint(mod)
 
-m2 <- lmer(year.mean ~ subject_sex + subject_ageClass + (1|subject_name), data = mod.df, REML = FALSE)
-#summary(m2)
+sjPlot::tab_model(mod)
 
-m3 <- lmer(year.mean ~ subject_sex + log(year.mcp.area) + (1|subject_name), data = mod.df, REML = FALSE)
-summary(m3)
 
-m3.disp <- lmer(year.mean ~ subject_sex + log(year.mcp.area) + log(mu.daily.disp) + (1|subject_name), data = mod.df, REML = FALSE)
-summary(m3.disp)
 
-m4 <- lmer(year.mean ~ subject_sex + (1|subject_name), data = mod.df, REML = FALSE)
-#summary(m4)
 
-m5 <- lmer(year.mean ~ subject_ageClass + (1|subject_name), data = mod.df, REML = FALSE)
-#summary(m5)
-
-m6 <- lmer(year.mean ~ (1|subject_name), data = mod.df, REML = FALSE)
-
-m7 <- lmer(year.mean ~ log(year.mcp.area) + (1|subject_name), data = mod.df, REML = FALSE)
-
-m8 <- lmer(year.mean ~ log(mu.daily.disp) + (1|subject_name), data = mod.df, REML = FALSE)
-
-m9 <- lmer(year.mean ~ log(mu.daily.disp) + log(year.mcp.area) + (1|subject_name), data = mod.df, REML = FALSE)
-
-knitr::kable(AICc(m1, m2, m3, m4, m5, m6, m7, m8, m9))
-
-sjPlot::tab_model(m9)
-
-# mod selection table
-aicc <- AICc(m1, m2, m3, m4, m5, m6, m7, m8, m9)
-mods <- list(m1, m2, m3, m4, m5, m6, m7, m8, m9)
-t <- lapply(mods, logLik)
-t <- do.call(rbind, t)
-
-AIC.table <- cbind(aicc, t)
-AIC.table %>% arrange(AICc)
 ```
 
 Looking at residual plots, the model assumptions may be iffy. Residuals are clustered tightly at low levels of ag use, and then quickly disperse. 
@@ -135,18 +123,18 @@ A plot of fitted and actual mean ag use values looks good though.
 
 ```{r}
 # check residuals
-plot(m3)
+plot(m9)
 
 # box-plots of residuals by Subject
 plot(m3, subject_name ~ resid(., scaled=TRUE))
 
 # checking fitted with mean looks good
-plot(m3, year.mean ~ fitted(.), abline = c(0,1))
+plot(global, year.mean ~ fitted(.), abline = c(0,1))
 ```
 
 Use the fitted model, see that males use more ag than females, but not significantly more.
 ```{r}
-dat <- ggpredict(m3.disp, terms = c("year.mcp.area"))
+dat <- ggpredict(global, terms = c("mu.daily.disp", "ag.prop.hr"))
 plot(dat)
 
 ```
