@@ -5,13 +5,16 @@
 library(tidyverse)
 library(lubridate)
 library(adehabitatHR)
+library(raster)
 
 source('GME_functions.R')
 
 ##### Prep Data #####
 # Import cluster-classified data and cluster model object
 movdata <- readRDS('./GMM/movdata/GMEcollars_003_usedClust_2020-10-30.rds')
+movdata$individual.year <- paste(movdata$subject_name, movdata$year.cuts, sep = '.')
 mod <- readRDS('./GMM/results/mSelect_2020-10-30.rds')
+dist2ag <- raster("./spatial data/dist2ag_estes_32736_2019-11-21.tif")
 
 ##### Home Range Calcs #####
 ## Build homeranges for each individual-year and extract the areas
@@ -34,12 +37,31 @@ for(i in 1:length(split)){
 mcp.areas <- do.call(rbind, split.area)
 movdata$year.mcp.area <- mcp.areas@data$year.mcp.area
 
+
+## Calculate centroid to ag distance
+# get centroids to check distance to ag
+centroids <- lapply(mcp, getSpPPolygonsLabptSlots)
+centroids <- as.data.frame(do.call(rbind, centroids))
+centroids$individual.year <- names(mcp)
+colnames(centroids) <- c('x', 'y', 'individual.year')
+
+# # create spatial points 
+locs <- SpatialPointsDataFrame(as.matrix(centroids[c("x","y")]), data = centroids, 
+                               proj4string = crs('+proj=utm +init=epsg:32736'))
+
+
+centroids$centroid.dist <- extract(dist2ag, locs)
+centroids$x <- NULL
+centroids$y <- NULL
+movdata <- inner_join(movdata, centroids, by = c("individual.year"))
+
+
 ## Calculate mean daily displacement
 movdata$ymd <- as.Date(movdata$date, "%Y/%m/%d")
 stat <- function(x) c(sum = sum(x))
 ag.daily <- as.data.frame(aggregate(dist ~ ymd + subject_name, movdata, stat)) # aggregated stats by day
 
-# bind daily displacment to full dataset
+# bind daily displacement to full dataset
 displacement <- inner_join(movdata, ag.daily, by = c("ymd", "subject_name")) %>%
   rename(daily.disp = dist.y) %>%
   mutate(tactic.season = as.integer(tactic.season), year.cuts = as.character(year.cuts)) %>%
@@ -73,10 +95,11 @@ amplitude <- movdata %>%
          year.begin = min(date),
          year.end = max(date)) %>%
   group_by(subject_name, tactic.agg, site, year.cuts, tactic.season, year.begin, year.end, year.mean, year.max, year.min, year.amp, duration,
-           year.mcp.area, mu.daily.disp, subject_sex, subject_ageClass, m.lag) %>%
+           year.mcp.area, mu.daily.disp, subject_sex, subject_ageClass, m.lag, centroid.dist) %>%
   # filter to individual years with at least 1 month's worth of fixes (does not account for NAs)
   tally() %>% filter(n > 500) %>% droplevels()
 #View(amplitude)
+
 
 
 ##### Temporal Tactic Changes ######
@@ -147,6 +170,8 @@ change.df <- amplitude %>%
   #dplyr::select(subject_name, year.cuts, tactic.season, tactic.prev, tactic.change, tactic.direction) %>%
   #drop_na() %>%
   droplevels()
+
+write.csv(change.df, './GMM/results/individual_year_classification 20210216.csv')
 
 ## Are ele characteristics driving tactic choice? 
 ## Model the current years tactic as a function of prev. year tactic, peak NDVI, home range, ageClass, sex
