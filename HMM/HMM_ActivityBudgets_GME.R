@@ -31,9 +31,9 @@ output <- readRDS("./HMM/GMEcollars_003_population_original.rds") # dataset prio
 output$viterbi <- viterbi(hmm.df)
 
 # add stationary state props
-t <- stationary(hmm.df)
-df <- as.data.frame(t[[1]])
-output <- cbind(output, df)
+# t <- stationary(hmm.df)
+# df <- as.data.frame(t[[1]])
+# output <- cbind(output, df)
 
 # create new varibles to differentiate ag and non-ag in non-protected areas
 output$ag.used <- ifelse(output$lc.estes == 1, 1, 0)
@@ -62,15 +62,15 @@ system.time({
 
 output <- do.call("rbind", merge)
 
-#write.csv(output, "./HMM/movdata/GMEcollars_003_HMMclassified_20201206.csv")
+write.csv(output, "./HMM/movdata/GMEcollars_003_HMMclassified_20201206.csv")
 
 
 ##### Activity Budgets #####
 
 output.plot <- mutate(output, viterbi = recode_factor(viterbi, 
                                                  "1" = "encamped",
-                                                 "2" = "foraging",
-                                                 "3" = "transit"),
+                                                 "2" = "meandering",
+                                                 "3" = "directed walk"),
                 tactic.season = recode_factor(tactic.season,
                                               "1" = "Rare",
                                               "2" = "Sporadic",
