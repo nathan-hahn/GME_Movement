@@ -68,9 +68,9 @@ write.csv(output, "./HMM/movdata/GMEcollars_003_HMMclassified_20201206.csv")
 ##### Activity Budgets #####
 
 output.plot <- mutate(output, viterbi = recode_factor(viterbi, 
-                                                 "1" = "encamped",
-                                                 "2" = "meandering",
-                                                 "3" = "directed walk"),
+                                                 "1" = "Encamped",
+                                                 "2" = "Meandering",
+                                                 "3" = "Directed Walk"),
                 tactic.season = recode_factor(tactic.season,
                                               "1" = "Rare",
                                               "2" = "Sporadic",
@@ -143,8 +143,13 @@ tactic
 
 
 ## Budget by tactic and ag window
-t0 <- filter(output.plot, ag.window == 0)
-t1 <- filter(output.plot, ag.window == 1) # rare individuals do not have enough points
+output.plot$ag.window <- as.factor(output.plot$ag.window)
+levels(output.plot$ag.window) <- c('Out of Phase', 'In Phase')
+
+t0 <- filter(output.plot, ag.window == 'Out of Phase')
+t1 <- filter(output.plot, ag.window == 'In Phase') # rare individuals do not have enough points
+
+
 
 ag.tactic <- ggplot() +
   facet_grid(viterbi~tactic.season) +
@@ -160,9 +165,9 @@ ag.tactic <- ggplot() +
            color="dark grey", linetype="dashed", size=1) +
 
   # add colors
-  scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("state")) +
-  scale_colour_manual(values = c("black", 'red' ), name = c("ag window")) +
-  xlab("hour (0-23)") + ggtitle('Activity Budget by Tactic and Ag Use')
+  scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("State")) +
+  scale_colour_manual(values = c("black", 'red' ), name = c("Ag Use Phase")) +
+  xlab("Hour (0-23)") + ylab('Density')
 ag.tactic
 
 ##### Overlap Tests #####
