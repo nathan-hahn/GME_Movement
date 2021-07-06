@@ -143,18 +143,18 @@ ggplot(change.sum, aes(factor(tactic.season), change)) + geom_pointrange(
 # plot by sex
 change.sex <- change %>% 
   filter(subject_name %in% change$subject_name) %>%
-  group_by(subject_sex) %>%
+  group_by(subject_sex, tactic.season) %>%
   summarise(year.n = length(year.cuts),
             change = sum(tactic.change)/year.n,
             sd = sd(tactic.change),
             se = sd/sqrt(year.n),
             lwr = change - se,
-            upr = change + se) #%>%
-  #mutate(tactic.season = recode_factor(as.factor(tactic.season),
-  #                                     "1" = "Rare",
-  #                                     "2" = "Sporadic",
-  #                                     "3" = "Seasonal",
-  #                                     "4" = "Habitual"))
+            upr = change + se) %>%
+  mutate(tactic.season = recode_factor(as.factor(tactic.season),
+                                      "1" = "Rare",
+                                      "2" = "Sporadic",
+                                      "3" = "Seasonal",
+                                      "4" = "Habitual"))
 
 # plot
 ggplot(change.sex, aes(factor(tactic.season), change, color = subject_sex)) + geom_pointrange(
@@ -190,11 +190,10 @@ mod.df <- change.df %>%
   dplyr::select(subject_name, tactic.change, subject_sex, subject_ageClass, year.mcp.area, mu.daily.disp, m.lag, tactic.season, tactic.prev) %>%
   
   # drop years with no previous tactic (first years)
-  drop_na() %>% droplevels() 
+  drop_na() %>% droplevels() %>%
   
-  # normalize homerange data
-  #mutate(year.mcp.area = (year.mcp.area - min(year.mcp.area))/
-   #        (max(year.mcp.area) - min(year.mcp.area)))
+  # log homerange data
+  mutate(year.mcp.area = log(year.mcp.area))
 
 
 # fit models
@@ -203,11 +202,11 @@ m2 <- glmer(tactic.change ~ tactic.prev + subject_sex + subject_ageClass + (1|su
 m3 <- glmer(tactic.change ~ tactic.prev + (1|subject_name), data = mod.df, family = 'binomial')
 m4 <- glmer(tactic.change ~ subject_sex + subject_ageClass + (1|subject_name), data = mod.df, family = 'binomial')
 m5 <- glmer(tactic.change ~ subject_sex*subject_ageClass + (1|subject_name), data = mod.df, family = 'binomial')
-m6 <- glmer(tactic.change ~ subject_sex*subject_ageClass + log(year.mcp.area) + (1|subject_name), data = mod.df, family = 'binomial')
-m7 <- glmer(tactic.change ~ subject_sex*subject_ageClass + log(year.mcp.area) + tactic.prev + (1|subject_name), data = mod.df, family = 'binomial')
-m8 <- glmer(tactic.change ~ log(year.mcp.area) + tactic.prev + (1|subject_name), data = mod.df, family = 'binomial')
+m6 <- glmer(tactic.change ~ subject_sex*subject_ageClass + year.mcp.area + (1|subject_name), data = mod.df, family = 'binomial')
+m7 <- glmer(tactic.change ~ subject_sex*subject_ageClass + year.mcp.area + tactic.prev + (1|subject_name), data = mod.df, family = 'binomial')
+m8 <- glmer(tactic.change ~ year.mcp.area + tactic.prev + (1|subject_name), data = mod.df, family = 'binomial')
 m9 <- glmer(tactic.change ~ subject_sex*subject_ageClass + log(mu.daily.disp) + (1|subject_name), data = mod.df, family = 'binomial')
-m10 <- glmer(tactic.change ~ subject_sex*subject_ageClass + log(mu.daily.disp) + log(year.mcp.area) + (1|subject_name), 
+m10 <- glmer(tactic.change ~ subject_sex*subject_ageClass + log(mu.daily.disp) + year.mcp.area + (1|subject_name), 
              data = mod.df, family = 'binomial')
 # AIC table w/ likelihoods
 knitr::kable(AICc(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10))
@@ -248,9 +247,13 @@ plot.dat <- m6@frame %>%
 # plot.dat.odds
 
 # plot
-ggplot(plot.dat, aes(x = subject_ageClass, y = mean, color = subject_sex)) + 
+levels(plot.dat$subject_sex) <- c('Female', 'Male')
+levels(plot.dat$subject_ageClass) <- c('Young adult', 'Mature adult')
+
+ggplot(plot.dat, aes(x = subject_ageClass, y = mean, shape = subject_sex)) + 
   geom_pointrange(aes(ymin = lwr.ci, ymax = upr.ci)) + 
   geom_line(aes(group = subject_sex), linetype = "dashed") + 
-  xlab("Age Class") + ylab("Probability of Switching Tactics") + labs(color = "Sex")
+  xlab("Age Class") + ylab("Probability of Switching Tactics") + labs(shape = "Sex")
+
 
 
