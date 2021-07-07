@@ -10,22 +10,48 @@ NOTE: Grumeti data is at 30-min intervals!!
 
 2. Raster Extraction
 Raster extraction for the full dataset. Limited to ecosystem-wide layers. 
-#TODO: Parallelize raster extraction -- requires fixing extents to create a raster stack
 
-3. HWC clustering
+3. MovData Filter
+Filter out individuals based on overlap with spatial layer extents and time (must overlap at least one crop season)
+
+4. Tactic Clustering
+
+GMM/Tactic Clustering
+Calculates ag use stats (mean, 90-day max, etc.)
 Applies GMM models to the full data set
+Cross validation of model
 Option to filter and apply to only a single data set
-#TODO: Subsample Grumeti data to 1 hour before extracting ag values?
 
-4. HWC temporal use
-Generates cummulative ag use graphs (full or single dataset)
-Applies smoothing function over data for rolling average of ag use (full or single dataset)
-#TODO: Subsample Grumeti data to 1 hour before extracting ag values?
+GMM/GMM_cluster_results
+Get cluster cutpoints and classify individual-year tactics
+Figures and tables summarizing aggregate and individual-year tactic cluster results
+
+GMM/Ag_Regression_Models
+Regression models of ag use in relation to movement and sex/age characteristics
+
+GMM/Tactic_Change_Models
+Regression models on tactic change
+
 
 5. HMM
-#TODO: Create HMM code to run on the full dataset
-#TODO: Run HMM on Grumeti only at 30-min intervals 
-#TODY: Add filter code to HMM_prepData_pop_GME.R
-df <- filter(df, fixType != "irregular") %>%
-  filter(burst %in% hmm.filter$burst) %>%
-  droplevels()
+Fit HMM, evaluate, simulation, and activity budgets
+
+HMM_prepData_pop_GME
+Preps data and calculates log speed.
+Filters out individuals with high % missing fixes
+
+HMM_population_fit_GME
+Fit HMM candidate models
+
+HMM model assess plots & Simulation
+Assess the model outputs
+
+HMM_ActivityBudgets_GME
+Apply viterbi algorithm to estimate latent states
+Calculate activity time budgets and plot (Fig S11)
+Calculate activity density bugets and plot (Fig 4)
+Conduct overlap tests and apply regression models
+
+
+
+
