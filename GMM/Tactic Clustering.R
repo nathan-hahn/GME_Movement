@@ -10,14 +10,35 @@ library(lubridate)
 library(dplyr)
 source("GME_functions.R")
 
-#### Prep Data ####
-# Load filtered data for individuals that meet temporal and spatial criteria for clustering
-movdat.filter <- readRDS('./GMM/movdata/GMEcollars_003_res90_2020-10-30.rds')
+##### Data Prep #####
+movdat <- readRDS('./movdata/GMEcollars_003_usedFilter_2020-10-30.rds')
+movdat$ag.used <- ifelse(movdat$lc.estes == 1, 1, 0) 
 
-# dataframe for fitting - add custom filters here as needed
-df <- movdat.filter 
+##### Add Crop-Based Year Cuts #####
+# create year cuts based on crop seasons across mara and serengeti. 
+# calendar years split Dec-Feb crop seasons
+
+# Yearly cuts - set april cut points
+year.cuts <- ymd_hms(c("2010-04-01 00:00:00", "2011-04-01 00:00:00", "2012-04-01 00:00:00", "2013-04-01 00:00:00", "2014-04-01 00:00:00", 
+                       "2015-04-01 00:00:00", "2016-04-01 00:00:00", "2017-04-01 00:00:00", 
+                       "2018-04-01 00:00:00", "2019-04-01 00:00:00", "2020-04-01 00:00:00"), tz = 'Africa/Nairobi')
+year.names <- c("2010", "2011", '2012', "2013", "2014", "2015", "2016", "2017", "2018", "2019")
+# get yearly cuts using april cut points
+rng <- cut( movdat$date, breaks = c(year.cuts), include.lowest = T)
+rng.name <- cut(movdat$date, breaks = c(year.cuts), include.lowest = T, labels = year.names)
+
+# create variables
+movdat$cut.date <- rng
+movdat$year.cuts <- rng.name
+movdat$month <- month(movdat$date)
+
+# # export movdata with season and year cuts
+# saveRDS(roll.90, paste0('./GMM/movdata/GMEcollars_003_res90_', Sys.Date(),'.rds'))
+
+# dataframe for fitting - add custom filters here as needed (e.g. region-specific)
+df <- movdat
   
-##### Mean occupancy #####
+##### Mean Ag use #####
 ag.mean <- df %>%
   group_by(subject_name) %>%
   summarise(n = n(),
@@ -25,7 +46,7 @@ ag.mean <- df %>%
 
 (ag.mean)
 
-##### Occupancy by Month #####
+##### Ag Use by Month #####
 # calculate occupancy by month
 ag.month <- df %>%
   group_by(site, subject_name, month) %>%
@@ -46,38 +67,59 @@ p <- ggplot(ag.month, aes(month, month.occupancy)) + geom_bar(stat = "identity")
 p
 
 
+
+##### 90-day Mean Ag Use - Moving window stats #####
+roll.filter <- df %>%
+  group_by(subject_name) %>%
+  tally() %>% 
+  filter(n >= 24*30*3) # months
+
+roll.df <- filter(df, subject_name %in% roll.filter$subject_name) %>% droplevels()
+split <- split(roll.df, roll.df$subject_name)
+
+window <- c(90*24) # in hours. Split to before and after when align = center
+
+output <- NULL
+for(i in 1:length(window)){
+  # calculate moving window stats - see rollstats function
+  output[[i]] <- window_stats(df.list = split, window = window[[i]], align = 'center')
+  
+}
+
 ##### Rolling Occupancy #####
-max.max <- df %>%
+# max.max - the max 90-day ag use for each individual
+max.max <- output[[1]] %>%
   group_by(subject_name) %>%
   filter(is.na(mean) == FALSE) %>%
   summarise(max.max = max(mean)) 
 
 # Rolling stats by individual-year - used to calculate the max.mean. 
 # additional stats are useful for context and to eval data before model fitting
-amplitude <- df %>%
+roll.stats <- output[[1]] %>%
   filter(!is.na(mean)) %>%
   group_by(subject_name, year.cuts) %>%
-  mutate(season.mean = mean(ag.used),
-         season.max = max(mean), # value of interest for max.mean
-         season.min = min(mean),
-         season.diff = season.max - season.min,
-         season.begin = min(date),
-         season.end = max(date)) %>%
-  group_by(subject_name, year.cuts, season.begin, season.end, season.mean, season.max, season.min, season.diff) %>%
-  #filter to individual seasons with at least 1 month's worth of fixes
+  mutate(year.mean = mean(ag.used),
+         year.max = max(mean), # value of interest for max.mean
+         year.min = min(mean),
+         year.diff = year.max - year.min,
+         year.begin = min(date),
+         year.end = max(date)) %>%
+  group_by(subject_name, year.cuts, year.begin, year.end, year.mean, year.max, year.min, year.diff) %>%
+  #filter to individual seasons with at least 1 month's worth of fixes and check that they overlap a crop season
   tally() %>% filter(n > 500) %>% droplevels()
 
-# max.mean value calculation for each individual
-max.mean <- amplitude %>% ungroup() %>% group_by(subject_name) %>%
-  summarise(max.mean = mean(season.max))
+# max.mean value calculation for each individual - mean of max values across years
+max.mean <- roll.stats %>% ungroup() %>% group_by(subject_name) %>%
+  summarise(max.mean = mean(year.max))
 
-##### Tabulate Occupancy Results #####
+##### Tabulate Ag Use Results #####
 # Join the results from each occupancy method into a single table of individuals for model fitting
 result <- full_join(max, ag.mean) %>% full_join(., max.max) %>% full_join(., max.mean)
-(result)
 
 # diff value calculation - tried different equations for diff
 result$diff <- result$max.mean - result$mean.occupancy
+
+(result)
 
 ####Model Fitting####
 
