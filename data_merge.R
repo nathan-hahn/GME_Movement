@@ -9,11 +9,11 @@ library(lubridate)
 
 
 ##### LOAD DATA #####
-mep <- readRDS("./movdata/MEPcollars_20200815_clean_2020-10-30.rds")
-metaMEP <- read.csv("./movdata/MEPcollars_20200815_metadata.csv") 
+mep <- readRDS("./movdata/mep/MEPcollars_20200815_clean_2020-10-30.rds")
+metaMEP <- read.csv("./movdata/mep/MEPcollars_20200815_metadata.csv") 
 metaMEP$X <- NULL
-gr <- readRDS("./movdata/GRcollars_20191231_clean_2020-06-25.rds")
-metaGR <- read.csv("./movdata/GRcollars_20191231_metadata.csv")
+gr <- readRDS("./movdata/grumeti/GRcollars_20191231_clean_2020-06-25.rds")
+metaGR <- read.csv("./movdata/grumeti/GRcollars_20191231_metadata.csv")
 
 
 ##### MERGE #####
