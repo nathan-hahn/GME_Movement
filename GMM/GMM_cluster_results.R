@@ -166,10 +166,13 @@ tactics.sex <- amplitude %>%
   )
 tactics.sex
 
+tactics.sex$subject_sex <- as.factor(tactics.sex$subject_sex)
+levels(tactics.sex$subject_sex) <- c('Female', 'Male')
+
 ggplot(tactics.sex, aes(tactic.season, prop)) + geom_pointrange(
-  aes(ymin = lwr.ci, ymax = upr.ci, color = subject_sex), 
+  aes(ymin = lwr.ci, ymax = upr.ci, shape = subject_sex), 
     position = position_dodge(0.3)) + xlab("Tactic class") + ylab("Proportion") +
-  labs(color = 'Sex') + geom_hline(aes(yintercept = 0.5))
+  labs(shape = 'Sex')
 
 
 ## Tactics by age class - compare prop of ag classes by age class. Distribution of age classes is not even so hard to compare props between age classes
