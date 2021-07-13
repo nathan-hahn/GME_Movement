@@ -22,19 +22,21 @@ movdat <- readRDS('./GMM/movdata/GMEcollars_003_res90_2020-10-30.rds')
   
 mod <- readRDS('./GMM/results/mSelect_2020-10-30.rds')
 
-clust.result <- read.csv("./GMM/results/clustResult_GME_2020-10-30.csv") 
-clust.summary <- clust.result %>%
+clust.result <- read.csv("./GMM/results/clustResult_GME_2020-10-30.csv") %>%
   mutate(ag.class.mean = recode_factor(as.factor(ag.class.mean),
                                        "1" = "Rare",
                                        "2" = "Sporadic",
                                        "3" = "Seasonal",
-                                       "4" = "Habitual")) %>%
+                                       "4" = "Habitual"))
+clust.summary <- clust.result %>%
   group_by(ag.class.mean) %>%
   summarise(n = length(ag.class.mean),
             mean = MeanCI(mean.occupancy, method = "boot", type = "norm", R=200)[1],
             lwr.ci = MeanCI(mean.occupancy, method = "boot", type = "norm", R=200)[2],
             upr.ci = MeanCI(mean.occupancy, method = "boot", type = "norm", R=200)[3]) 
 (clust.summary) # overall
+
+
 
 ## Plot cluster summaries by mean ag use trends
 ggplot(clust.summary, aes(ag.class.mean, mean)) + geom_pointrange(
@@ -43,11 +45,12 @@ ggplot(clust.summary, aes(ag.class.mean, mean)) + geom_pointrange(
   scale_color_manual(values = c("blue", "#FF0000FF", "#80FF00FF", "#8000FFFF")) +
   xlab("Tactic Class") + ylab("Mean Occupancy") + labs(color = "Tactic Class")
   
-ggplot(clust.summary, aes(ag.class.mean, mean)) + geom_boxplot(
-  aes(ymin = lwr.ci, ymax = upr.ci, color = ag.class.mean), 
-  position = position_dodge(0.3)) + 
-  scale_color_manual(values = c("blue", "#FF0000FF", "#80FF00FF", "#8000FFFF")) +
-  xlab("Tactic Class") + ylab("Mean Occupancy") + labs(color = "Tactic Class")
+ggplot(clust.result, aes(ag.class.mean, mean.occupancy)) + geom_boxplot() + 
+  geom_point(shape = 15, color = 'dark grey', position = position_jitter(width = 0.21)) +
+  xlab("Tactic Class") + ylab("Mean Agricultural Use") 
+
+
+
 
 
 ##### Get cut points for the ag classes #####
@@ -97,6 +100,12 @@ tactics.df <- do.call(rbind, result) %>%
                                 "3" = "Seasonal",
                                 "4" = "Habitual")) %>%
   filter(n > 500)
+
+ggplot(tactics.df, aes(ag.class.year, mean.occupancy)) + geom_boxplot() + 
+  geom_point(shape = 15, color = 'dark grey', position = position_jitter(width = 0.21)) +
+  xlab("Tactic Class") + ylab("Mean Agricultural Use") 
+
+
 
 ## clust summary - by individual season
 tactics.summary <- tactics.df %>%
