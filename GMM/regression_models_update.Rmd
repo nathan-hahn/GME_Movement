@@ -119,7 +119,7 @@ arrange(t, AICc)
 summary(mod)
 confint(mod)
 
-sjPlot::tab_model(mod)
+sjPlot::tab_model(m8)
 
 
 
@@ -134,28 +134,28 @@ A plot of fitted and actual mean ag use values looks good though.
 
 ```{r}
 # check residuals
-plot(m9)
+plot(m8)
 
 # box-plots of residuals by Subject
 plot(m3, subject_name ~ resid(., scaled=TRUE))
 
 # checking fitted with mean looks good
-plot(global, year.mean ~ fitted(.), abline = c(0,1))
+plot(m8, year.mean ~ fitted(.), abline = c(0,1))
 ```
 
 Use the fitted model, see that males use more ag than females, but not significantly more.
 ```{r}
-dat <- ggpredict(global, terms = c("mu.daily.disp", "ag.prop.hr"))
+dat <- ggpredict(m8, terms = c("mu.daily.disp", "ag.prop.hr"))
 plot(dat)
 
 ```
 
-## 2. Activity overlap across tactics: logistic regression
+## 2. Activity overlap across tactics: logistic regression (OV_inter)
 Differentiation in risk tolerance and the deviation in state activity budgets between tactics is expected to translate into differentiation in circadian activity patterns during ag and non-ag movement phases. We constructed state-level activity pattern densities for ag and non-ag movement phases, calculated coefficients of overlap of the density distributions across tactics, and then compare coefficients for ag and non-ag phases. We expect there to be a low overlap in activity between tactics in agriculture, because of the differentiation in risk tolerance between the tactics. 
 
 Load output from coefficient of overlap tests and visualize group-level means and 95% confidence intervals.
 ```{r}
-comps.output <- read.csv('overlap_comps_output.csv') %>% # no longer including comps using all data (baseline)
+comps.output <- read.csv('./HMM/results/overlap_comps_20201104.csv') %>% # no longer including comps using all data (baseline)
   filter(AgWindow != "Baseline") %>% droplevels()
 
 # prep data
@@ -201,19 +201,6 @@ mod.df$state <- factor(mod.df$state, levels = c("Encamped", "R-A Search", "Explo
 mod.df$AgWindow <- as.factor(mod.df$AgWindow)
 mod.df$AgWindow <- relevel(mod.df$AgWindow, ref = "Non-Ag Window") # set non-ag window as 0 for interpretation
 mod.df$comp <- as.factor(mod.df$comp)
-
-
-# m1 <- glm(AgWindow ~ estOV, data = mod.df, family = binomial(link = 'logit'))
-# #summary(m1)
-# 
-# # state added with reference level for state 1
-# m2 <- glm(AgWindow ~ estOV + state, data = mod.df, family = binomial(link = 'logit'))
-# #summary(m2)
-# 
-# # state added as an interaction term
-# m3 <- glm(AgWindow ~ estOV*state, data = mod.df, family = binomial(link = 'logit'))
-# 
-# knitr::kable(AICc(m1, m2, m3))
 ```
 
 m2 shows that overlap is significantly higher among tactics in foraging state, and significantly lower in encamped state. 
@@ -247,7 +234,7 @@ tab_model(m2, auto.label = TRUE)
 ```
 
 
-## 3. Activity pattern changes within tactics based on agricultural usage
+## 3. Activity pattern changes within tactics based on agricultural usage (OV_intra)
 
 Results from the logistic regression showed that individuals in each tactic have similar activity patterns when in and outside of agriculture. Given this similarity, we looked at within-tactic differentiation in activity patterns during agricultural and non-agricultural use periods. 
 
@@ -257,7 +244,7 @@ Results from the logistic regression showed that individuals in each tactic have
 
 ```{r}
 #comps.output <- read.csv('within_tactic_comps.csv') 
-comps.output <- read.csv('indv.ag.comp.csv')
+comps.output <- read.csv('./HMM/results/indv.ag.comp_20201110.csv')
 
 
 # prep data

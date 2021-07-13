@@ -171,7 +171,7 @@ change.df <- amplitude %>%
   #drop_na() %>%
   droplevels()
 
-write.csv(change.df, './GMM/results/individual_year_classification 20210216.csv')
+#write.csv(change.df, './GMM/results/individual_year_classification 20210216.csv')
 
 ## Are ele characteristics driving tactic choice? 
 ## Model the current years tactic as a function of prev. year tactic, peak NDVI, home range, ageClass, sex
