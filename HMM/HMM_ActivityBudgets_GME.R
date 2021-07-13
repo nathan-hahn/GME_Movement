@@ -151,24 +151,43 @@ t1 <- filter(output.plot, ag.window == 'In Phase') # rare individuals do not hav
 
 
 
-ag.tactic <- ggplot() +
+# ag.tactic <- ggplot() +
+#   facet_grid(viterbi~tactic.season) +
+#   geom_density(data = t0, aes(x = hour(date),
+#                    fill = factor(viterbi), colour = factor(ag.window)), alpha = 0.3, adjust = 1.5) +
+#   geom_density(data = t1, aes(x = hour(date),
+#                               fill = factor(viterbi), colour = factor(ag.window)), alpha = 0.3, adjust = 1.5) +
+#   
+#   # add sunrise/sunset
+#   geom_vline(xintercept=6
+#              ,color="dark grey", linetype="dashed", size=1) + 
+#   geom_vline(xintercept=18,
+#            color="dark grey", linetype="dashed", size=1) +
+# 
+#   # add colors
+#   scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("State")) +
+#   scale_colour_manual(values = c("black", 'red' ), name = c("Ag Use Phase")) +
+#   xlab("Hour (0-23)") + ylab('Density')
+# ag.tactic
+
+ag.tactic.bw <- ggplot() +
   facet_grid(viterbi~tactic.season) +
-  geom_density(data = t0, aes(x = hour(date),
-                   fill = factor(viterbi), colour = factor(ag.window)), alpha = 0.3, adjust = 1.5) +
-  geom_density(data = t1, aes(x = hour(date),
-                              fill = factor(viterbi), colour = factor(ag.window)), alpha = 0.3, adjust = 1.5) +
+  geom_density(data = t0, aes(x = hour(date), fill = 'grey', alpha = 0.3)) +
+  geom_density(data = t1, aes(x = hour(date), fill = 'light grey', alpha = 0.3), linetype = 2) +
   
   # add sunrise/sunset
   geom_vline(xintercept=6
-             ,color="dark grey", linetype="dashed", size=1) + 
+             ,color="dark grey", linetype="dashed", size=0.3) + 
   geom_vline(xintercept=18,
-           color="dark grey", linetype="dashed", size=1) +
-
+             color="dark grey", linetype="dashed", size=0.3) +
+  
   # add colors
-  scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("State")) +
-  scale_colour_manual(values = c("black", 'red' ), name = c("Ag Use Phase")) +
-  xlab("Hour (0-23)") + ylab('Density')
-ag.tactic
+  scale_fill_grey(start = 0, end = 0.9) + 
+  xlab("Hour (0-23)") + ylab('Density') + theme(legend.position = "none")
+  
+ag.tactic.bw
+
+
 
 ##### Overlap Tests #####
 
