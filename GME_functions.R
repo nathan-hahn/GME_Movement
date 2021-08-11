@@ -26,7 +26,7 @@ window_stats <- function(df.list, window, align = "center"){
   require(xts)
   system.time({
     # Calculate moving window stats
-    ts <- lapply(df.list, as.ts, start = df.list[[i]]$date, frequency = 1) # frequency set with 30min fixes
+    ts <- lapply(df.list, as.ts, start = df.list[[i]]$date, frequency = 1) # frequency set with 1hr fixes
     tx <- lapply(ts, as.xts)
     res <- lapply(seq_along(tx), function(i) rollapply(tx[[i]]$ag.used, width = window, align = align,
                                                        by.column = FALSE, FUN = rollstat))
@@ -39,6 +39,44 @@ window_stats <- function(df.list, window, align = "center"){
     return(output)
   })
 }
+
+##### staging stats #####
+
+r_stat <- function(x, nas = TRUE) {
+  # x     = numeric vector
+  # na.rm = boolean, whether or not to remove NA's
+  
+  m  <- mean(x, na.rm = nas)
+  s  <- sd(x, na.rm = nas)
+  hi <- m + 2*s
+  lo <- m - 2*s
+  window <- max(x) # all points within the window will be labeled 1 - signals a "raiding period" for activity budgets/plotting
+  
+  ret <- c(mean = m, stdev = s, hi.95 = hi, lo.95 = lo, window = window) 
+  return(ret)
+}
+
+# Get rollstats for a list of individuals. Supply list of individuals and windows(s) to apply
+stage_stats <- function(df.list, window, col, align = "center"){
+  require(zoo)
+  require(xts)
+  system.time({
+    # Calculate moving window stats
+    ts <- lapply(df.list, as.ts, start = df.list[[i]]$date, frequency = 1) # frequency set with 1hr fixes
+    tx <- lapply(ts, as.xts)
+    res <- lapply(seq_along(tx), function(i) rollapply(tx[[i]][,col], width = window, align = align,
+                                                       by.column = FALSE, FUN = r_stat))
+    res <- lapply(res, as.data.frame) # converting inline with Map() doesn't work
+    
+    # merge outputs into data frame for each individual
+    merge <- Map(cbind, df.list, res)
+    output <- do.call("rbind", merge)
+    
+    return(output)
+  })
+}
+
+
 
 ##### plot_budget #####
 # function for plotting activity budgets
