@@ -260,14 +260,21 @@ mapview(hull.union)
 
 
 
-##### O-C testing #####
+##### Staging Event Stats #####
+# % of ag use days that had a staging event
+# % of overall time spent staging during ag use windows
+# overall % of encamped/meandering during staging
+# summary of displacement during staging (NSD and Displacement)
+
+
+# % of ag use days that had a staging event -- how often are elephants staging before a raid?
 
 
 
 
 
 
-##### Recussion #####
+##### Recursion #####
 library(recurse)
 
 df.recurse <- gme %>% ungroup() %>%
