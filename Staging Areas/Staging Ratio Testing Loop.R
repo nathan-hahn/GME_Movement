@@ -99,16 +99,17 @@ tag_stage <- function(df, ratio.seq){
 hr.start <- c(8:16) # hour start times (used in i loop)
 ratio.seq = seq(0.1, 5, 0.1) # sequence of possible E-M ratios (used in k loop)
 
-hr.win <- subset(cbind(hr.start, hr.end), hr.end <= max(hr.start))
-
-stage.table <- NULL
 
 # Run the Loop! 
+system.time({
+
+stage.table <- NULL # store accuracy results (used in k loop)
+stage.table.list <- NULL
 
 for(i in 2:9){ # window size loop
   
   # create matrix for possible start and end times 
-  hr.end <- hr.start + i  
+  hr.end <- hr.start + (i-1) #subtract 1 from current index for inclusive window size
   hr.win <- subset(cbind(hr.start, hr.end), hr.end <= max(hr.start))
   
   for (j in 1:dim(hr.win)[1]) { # window period loop indexes the matrix row to define stage period
@@ -133,7 +134,11 @@ for(i in 2:9){ # window size loop
       
     }
   }
+  
+  
+  stage.table.list[[i]] <- stage.table
+  
 }
-
+})
 
 
