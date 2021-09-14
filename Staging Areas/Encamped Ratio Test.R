@@ -1,4 +1,4 @@
-#### Stage Test - Net Squared Displacement ####
+#### Stage Test - E-M ratio ####
 
 library(tidyverse)
 library(lubridate)
@@ -38,26 +38,85 @@ eventIndex <- inverse.rle(within.list(rle(eventFlag),
 gme$ag.window.index <- eventIndex
 
 
-## Viz net square displacement
-test <- filter(gme, ag.window == 1, subject_name == 'Ivy')
-split <- split(test, test$ag.window.index)
+#### Plot ag windows ####
 
-plot(split$`1839`$R2n)
+# import estes LC layer for viz
+estes <- raster::raster('./spatial data/ag/ag_change03_reclassMara.tif')
 
-## Calculate NSD by stage period
-library(adehabitatLT)
-test <- filter(gme, stage.period == 1 & subject_name == 'Ivy')
-traj <- as.ltraj(cbind(test$x, test$y), date = ymd_hms(test$date), id = test$id, burst = test$dayBurst)
-traj.df <- ld(traj)
-test$nsd <- traj.df$R2n
-day.nsd <- test %>%
-  group_by(id, dayBurst, ag.window) %>%
-  summarise(maxNSD = max(R2n)) %>%
-  group_by(id, ag.window) %>%
-  summarise_at('maxNSD', .funs = list(min=min, Q1=~quantile(., probs = 0.25),
-                                    median=median, Q3=~quantile(., probs = 0.75),
-                                    max=max))
+# apply filter
+gme.ag.window <- gme[gme$ag.window.ext == 1 & gme$subject_name == 'Ivy',] # all staging points
+gme.stage.period <- gme[gme$ag.window.ext == 1 & gme$subject_name == 'Ivy' & hour(gme$date) %in% c(10:15),] # points from stage period
+split.ag.window <- split(gme.ag.window, gme.ag.window$dayBurst)
+split.stage.period <- split(gme.stage.period, gme.stage.period$dayBurst)
 
+t <- gme.ag.window %>% group_by(dayBurst) %>% tally()
+
+for(i in 1:40){
+  # raster zoom
+  e <- raster::extent(min(split.ag.window[[i]]$x) - 500, xmx = max(split.ag.window[[i]]$x) + 500, ymn = min(split.ag.window[[i]]$y) - 500, ymx=max(split.ag.window[[i]]$y) + 500)
+  plot(estes, ext = e, main = paste0(split.ag.window[[i]]$dayBurst[1]))
+  # add track
+  points(split.ag.window[[i]]$x, split.ag.window[[i]]$y)
+  lines(split.ag.window[[i]]$x, split.ag.window[[i]]$y)
+  
+  points(split.stage.period[[i]]$x, split.stage.period[[i]]$y, col = 'red')
+}
+
+# generate sample of dayBursts for tagging 
+f <- filter(gme, ag.window.ext == 1)
+dayBurst <- unique(f$dayBurst)
+set.seed(12)
+sample <- sample(dayBurst, size = length(dayBurst)*.1, replace = FALSE)
+
+# grab data by sample bursts
+sample.df <- filter(gme, dayBurst %in% sample)
+
+# create a table for tagging
+sample.table <- sample.df %>% group_by(dayBurst, subject_name) %>% tally()
+write.csv(sample.table, 'stage_tag_sample_table.csv')
+
+
+## make plots for tagging
+
+# create dataframe lists
+split.sample <- split(sample.df, sample.df$dayBurst) # locs from sample periods
+
+sample.stage.period <- sample.df[hour(sample.df$date) %in% c(10:15),] # locs from mid-day period of interest
+split.stage.period <- split(sample.stage.period, sample.stage.period$dayBurst)
+
+# pl0t in sections of 50
+for(i in 1:50){
+  # raster zoom
+  e <- raster::extent(min(split.sample[[i]]$x) - 500, xmx = max(split.sample[[i]]$x) + 500, ymn = min(split.sample[[i]]$y) - 500, ymx=max(split.sample[[i]]$y) + 500)
+  plot(estes, ext = e, main = paste0(split.sample[[i]]$dayBurst[1]))
+  # add track
+  points(split.sample[[i]]$x, split.sample[[i]]$y)
+  lines(split.sample[[i]]$x, split.sample[[i]]$y)
+  # add mid-day period as different color
+  points(split.stage.period[[i]]$x, split.stage.period[[i]]$y, col = 'red')
+}
+
+
+# ##### Viz net square displacement #####
+# test <- filter(gme, ag.window == 1, subject_name == 'Ivy')
+# split <- split(test, test$ag.window.index)
+# 
+# plot(split$`1839`$R2n)
+# 
+# ## Calculate NSD by stage period
+# library(adehabitatLT)
+# test <- filter(gme, stage.period == 1 & subject_name == 'Ivy')
+# traj <- as.ltraj(cbind(test$x, test$y), date = ymd_hms(test$date), id = test$id, burst = test$dayBurst)
+# traj.df <- ld(traj)
+# test$nsd <- traj.df$R2n
+# day.nsd <- test %>%
+#   group_by(id, dayBurst, ag.window) %>%
+#   summarise(maxNSD = max(R2n)) %>%
+#   group_by(id, ag.window) %>%
+#   summarise_at('maxNSD', .funs = list(min=min, Q1=~quantile(., probs = 0.25),
+#                                     median=median, Q3=~quantile(., probs = 0.75),
+#                                     max=max))
+# 
 
 
 ##### Figure - Ratios by hour #####
@@ -153,43 +212,121 @@ dim(stage)
 ## define the period for staging assessment (10am - 2pm, 5 hrs)
 gme$stage.period <- ifelse(hour(gme$date) >= 10 & hour(gme$date) <= 15, 1, 0)
 
-t <- gme %>%
+gme.stage <- gme %>%
   filter(!is.na(ag.window.ext)) %>%
   group_by(dayBurst, stage.period, ag.window.ext) %>%
   mutate(enc.day = sum(viterbi==1), meander.day = sum(viterbi==2), dw.day = sum(viterbi==3), n.day = n()) %>%
   mutate(ratio = enc.day/meander.day) %>%
-  mutate(ratio = ifelse(ratio == Inf, enc.day, ratio))
+  mutate(ratio = ifelse(ratio == Inf, enc.day, ratio)) %>%
+  mutate(ratio = ifelse(is.na(ratio), 0, ratio)) # for periods with all directed-walk
 
 
-t %>% filter(!is.na(ratio)) %>%
+gme.stage %>% filter(!is.na(ratio)) %>%
   group_by(stage.period, ag.window.ext) %>%
   summarise_at('ratio', .funs = list(min=min, Q1=~quantile(., probs = 0.25),
                                      median=median, Q3=~quantile(., probs = 0.75),
                                      max=max))
 
+gme.stage$cropseason = ifelse(gme.stage$month %in% c(1:2,5:8,12), 'crop','noncrop')
+
+
+#### Test E-M ratios in a loop
+
+ratio.seq = seq(0.1, 5, 0.1)
+
+tag_stage <- function(df, ratio.seq){
+  # tag all staging events
+  df$stage.event <- ifelse(df$ratio > ratio.seq & df$stage.period == 1 & df$dw.day == 0, 1, 0)
+  # tag ag staging events
+  df$ag.stage.event <- ifelse(df$ratio > ratio.seq & df$stage.period == 1 & df$dw.day == 0 & df$ag.window.ext == 1, 1, 0)
+  
+  ## index staging events
+  eventFlag <- ifelse(df$stage.event == 1, TRUE, FALSE)
+  eventIndex <- inverse.rle(within.list(rle(eventFlag), 
+                                        values[values] <- seq_along(values[values])))
+  # assign a unique event index for each stage event
+  df$stage.event.index <- eventIndex
+  
+  table <- df %>% group_by(ag.window.ext, cropseason) %>%
+    summarise(n.stage = length(unique(stage.event.index)),
+              n.stage.adj = n.stage/length(unique(dayBurst)),
+              ratio.seq = ratio.seq)
+  
+  table <- table %>% group_by(cropseason) %>%
+    mutate(n.stage.ratio = n.stage.adj[2]/n.stage.adj[1]) %>%
+    mutate(n.stage.err = n.stage.adj[1]/sum(n.stage.adj))
+  
+  return(table)
+} 
+
+
+
+# loop through ratio parameter sequence 
+stage.table <- NULL
+for(i in 1:length(ratio.seq)){
+  stage.table[[i]] <- tag_stage(gme.stage, ratio.seq[[i]])
+}
+
+# bind 
+stage.table <- do.call(rbind, stage.table)
+
+# plot
+stage.table$ag.window.ext <- as.factor(stage.table$ag.window.ext)
+stage.table <- stage.table %>%
+  group_by(ag.window.ext, cropseason) %>%
+  mutate(n.stage.ratio = ifelse(n.stage.ratio == lag(n.stage.ratio), NA, n.stage.ratio)) %>%
+  mutate(n.stage.err = ifelse(n.stage.err == lag(n.stage.err), NA, n.stage.err))
+
+
+ggplot(stage.table, aes(x = ratio.seq, y = n.stage.ratio, group = cropseason)) + geom_point(aes(color = cropseason)) + xlab('encamped:meandering ratio') +
+  ylab('Ratio of Ag:Non-Ag Events') + title('encamped:meandering ratio by season (10am-3pm)')
+
+ggplot(stage.table, aes(x = ratio.seq, y = n.stage.err, group = cropseason)) + geom_point(aes(color = cropseason)) + xlab('encamped:meandering ratio') +
+  ylab('Ag Stage Event Classification Accuracy') + title('encamped:meandering ratio by season (10am-3pm)')
+
+# optimal E-C threshold
+max(stage.table$n.stage.ratio, na.rm = TRUE)
+max(stage.table$n.stage.err, na.rm = TRUE)
+
+
+
+##### Tag staging events with optimal sequence #####
+ratio.threshold = 1.5
+
 # tag all staging events
-t$stage.event <- ifelse(t$ratio >0.5 & t$stage.period == 1 & t$dw.day == 0, 1, 0)
+gme.stage$stage.event <- ifelse(gme.stage$ratio > ratio.threshold & gme.stage$stage.period == 1 & gme.stage$dw.day == 0, 1, 0)
 # tag ag staging events
-t$ag.stage.event <- ifelse(t$ratio >0.5 & t$stage.period == 1 & t$dw.day == 0 & t$ag.window.ext == 1, 1, 0)
+gme.stage$ag.stage.event <- ifelse(gme.stage$ratio > ratio.threshold & gme.stage$stage.period == 1 & gme.stage$dw.day == 0 & gme.stage$ag.window.ext == 1, 1, 0)
 
 ## index staging events
-eventFlag <- ifelse(t$stage.event == 1, TRUE, FALSE)
+eventFlag <- ifelse(gme.stage$stage.event == 1, TRUE, FALSE)
 eventIndex <- inverse.rle(within.list(rle(eventFlag), 
                                       values[values] <- seq_along(values[values])))
-# assign event index
-t$stage.event.index <- eventIndex
-
-stage <- filter(t, stage.event == 1)
+# assign a unique event index for each stage event
+gme.stage$stage.event.index <- eventIndex
 
 
+# stages in ag and non-ag
+t <- gme.stage %>% group_by(ag.window.ext) %>%
+  summarise(n.stage = length(unique(stage.event.index)),
+            n.stage.adj = n.stage/length(unique(dayBurst)))
 
-                                                                 
 
+gme.stage %>% group_by(ag.window.ext) %>% summarise(n = length(unique(ag.window.index)))
+
+
+
+# filter to staging and ag staging events and plot them
+stage <- filter(gme.stage, stage.event == 1)
 plot(stage$x, stage$y, pch = 19)
 
-
-ag.stage <- filter(t, ag.stage.event == 1)
+ag.stage <- filter(gme.stage, ag.stage.event == 1)
 plot(ag.stage$x, ag.stage$y, pch = 19)
+
+stage.ivy.test <- gme.stage[gme.stage$ag.window.ext == 1 & gme.stage$subject_name == 'Ivy',]  %>% group_by(dayBurst) %>% mutate(stageBurst = ifelse(any(stage.event == 1), 1, 0)) %>%
+  group_by(dayBurst, stageBurst) %>% tally()
+
+
 
 ##### Plot staging event relocs #####
 
@@ -235,7 +372,7 @@ mcp.stage@data <- as.data.frame(stage.sp@data)
 ## Buffer and Union of staging hulls
 # convert data frame to sf object
 sf.object <- stage %>%
-  st_as_sf(coords = c("x", "y"))
+  st_as_sf(coords = c("x", "y"), crs = 32736)
 
 # convert MCPs to sf polygon objects - tied to the stage id
 hulls <- sf.object %>%
@@ -251,28 +388,53 @@ hull.union <- hulls %>%
   st_buffer(dist = median(gme$dist)) %>% # buffer by median step length of the dataset
   # union polygons
   st_union() %>%
+  st_make_valid() %>% 
   # set crs
   st_set_crs(st_crs(32736))
 
-mapview(hull.union)
+
+stage.sf <- stage.sf %>%
+  group_by(stage.event.index) %>%
+  mutate(n = n()) %>% filter(n >= 5) %>%
+  mutate(ag.window.ext = as.factor(ag.window.ext))
+levels(stage.sf$ag.window.ext) <- c('non-ag stage', 'ag stage')
+
+t <- mapview(hull.union, alpha.regions = 0.3) + mapview(stage.sf, cex = 2, zcol = 'ag.window.ext', col.regions = c('black', 'red'), burst = TRUE)
+t
 
 
-
+## Save spatial objects
+#saveRDS(hull.union, 'staging hulls all.rds')
+#saveRDS(hull.union, 'staging hulls ag.rds')
+#saveRDS(stage.sf, 'staging locs all.rds')
 
 
 ##### Staging Event Stats #####
-# % of ag use days that had a staging event
+# % of ag use days that had a staging event (O-C)
 # % of overall time spent staging during ag use windows
 # overall % of encamped/meandering during staging
 # summary of displacement during staging (NSD and Displacement)
 
 
 # % of ag use days that had a staging event -- how often are elephants staging before a raid?
+gme.stage %>% group_by(dayBurst) %>%
+  mutate(stage.day = if_else(any(stage.event == 1), 1, 0)) %>%
+  group_by(stage.day, ag.window.ext) %>% summarise(n = length(unique(dayBurst)))
+
+1593/(12048+1593)
 
 
+## I think doing it by days is inflating the number of ag days and underestimating the % of ag use days that have staging, because f they are still in ag at 2am it will count as a second day. 
+stage.days <- gme.stage %>% group_by(dayBurst) %>%
+  mutate(stage.day = if_else(any(stage.event == 1), 1, 0)) %>% ungroup() %>%
+  filter(ag.window.ext == 1 & stage.event == 1) %>% group_by(subject_name, tactic.agg) %>% summarise(n = length(unique(dayBurst)))
+ag.days <- gme.stage %>% filter(ag.window == 1) %>% group_by(subject_name, tactic.agg) %>% summarise(n = length(unique(dayBurst)))
 
 
+days <- merge(stage.days, ag.days, by = 'subject_name')
+days$pct <- days$n.x/days$n.y
 
+boxplot(days$pct ~ days$tactic.agg.x)
 
 ##### Recursion #####
 library(recurse)
@@ -301,3 +463,10 @@ plot(test, df.recurse, legendPos = c(13, -10), pch = 19, cex = 0.5)
 
 recurse.test <- lapply(out, getRecursionsInPolygon, trajectory = df.recurse)
 plot(recurse.test)
+
+
+
+
+
+
+
