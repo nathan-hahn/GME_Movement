@@ -275,8 +275,7 @@ stage.table$ag.window.ext <- as.factor(stage.table$ag.window.ext)
 stage.table <- stage.table %>%
   group_by(ag.window.ext, cropseason) %>%
   mutate(n.stage.ratio = ifelse(n.stage.ratio == lag(n.stage.ratio), NA, n.stage.ratio)) %>%
-  mutate(n.stage.err = ifelse(n.stage.err == lag(n.stage.err), NA, n.stage.err))
-
+  mutate(n.stage.err = ifelse(n.stage.err == lag(n.stage.err), NA, n.stage.err)) 
 
 ggplot(stage.table, aes(x = ratio.seq, y = n.stage.ratio, group = cropseason)) + geom_point(aes(color = cropseason)) + xlab('encamped:meandering ratio') +
   ylab('Ratio of Ag:Non-Ag Events') + title('encamped:meandering ratio by season (10am-3pm)')
