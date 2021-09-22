@@ -1,5 +1,6 @@
 #### Staging Area Algorithm ####
 library(tidyvere)
+library(lubridate)
 library(sf)
 library(adehabitatHR)
 library(recurse)
@@ -12,7 +13,7 @@ library(recurse)
 
 
 # import state-classified data
-gme <- read.csv("HMM/movdata/GMEcollars_003_HMMclassified_20201206.csv")
+gme <- as.data.frame(data.table::fread("HMM/movdata/GMEcollars_003_HMMclassified_20201206.csv"))
 unique(gme$subject_name)
 
 # filter out outlier steps 
@@ -58,7 +59,7 @@ seq.tag <- function(df, state, window, state.name, ref = 1) {
 }
 
 # define relocs associated with encamped and directed walk sequences
-split.tag <- lapply(split.seq, seq.tag, state = 1, window = 4, state.name = 'enc.seq')
+split.tag <- lapply(split.seq, seq.tag, state = 1, window = 12, state.name = 'enc.seq')
 split.tag <- lapply(split.tag, seq.tag, state = 3, window = 1, state.name = 'dw.seq', ref = 1)
 
 #### 3. Define Staging Events ####
@@ -102,27 +103,129 @@ t <- as.data.frame(cbind(df$enc.seq, df$stage, df$stage.session))
 View(t)
 unique(df$stage.session)
 
-##### 4. Test Encamped Sequence distributions within ag windows  #####
+#### 4. Test Encamped Sequence distributions within ag windows  ####
 
 ## define 24-hour ag window definitions 
+min(gme$date)
+max(gme$date)
 
+# Create a sequence of date-times to cut with - 6am start time
+start <- ymd_hms("2011-09-28 06:00:00")
+interval <- 60*24
+end <- ymd_hms("2020-01-01 06:00:00")
+day.cuts <- seq(from=start, by=interval*60, to=end)
+day.index <- seq(1,(length(day.cuts)-1), 1)
+
+# cut and create day index
+rng <- cut(ymd_hms(gme$date), breaks = day.cuts, include.lowest = T)
+rng.name <- cut(ymd_hms(gme$date), breaks = day.cuts, include.lowest = T, labels = day.index)
+gme$cut.day <- rng
+gme$day.index <- rng.name
+gme$day.index <- paste(gme$subject_name, rng.name, sep = '-')
+
+
+## resetting ag window for 24hr ag use  
+# if subject used ag in a 24 hour period, the period is coded as a 1. otherwise coded as a 0. 
+t <- gme %>%
+  group_by(subject_name, day.index) %>%
+  mutate(ag.window.24 = ifelse(sum(ag.used) > 1, 1, 0))
+
+## apply rle by subject and day
+# day.index acts as the grouping variable. is unique for each subject-day
+# split and lapply workflow takes a very long time - way to map the function by group? 
+split <- split(t, t$day.index)
+split <- lapply(split, state.seq, state.name = 'seq.length')
+test <- do.call(rbind, split )
+ag.window.24 <- test[test$ag.window.24 == 1]
+
+ag.window.24 %>% group_by(viterbi) %>%
+  summarise_at('seq.length', .funs = list(min=min, Q1=~quantile(., probs = 0.25),
+                                          median=median, Q3=~quantile(., probs = 0.75),
+                                          max=max)) %>%
+  mutate(viterbi = c('encamped', 'meandering', 'dirwalk'))
+
+
+test %>% group_by(ag.window.24, viterbi) %>%
+  summarise_at('seq.length', .funs = list(min=min, Q1=~quantile(., probs = 0.25),
+                                          median=median, Q3=~quantile(., probs = 0.75),
+                                          max=max)) %>%
+  mutate(viterbi = c('encamped', 'meandering', 'dir-walk'))
+
+ag.24.encamped <- filter(test, ag.window.24 == 1 & viterbi == 1)
+nonag.24.encamped <- filter(test, ag.window.24 == 0 & viterbi == 1)
+
+par(mfrow = c(2,1))
+hist(ag.24.encamped$seq.length, breaks = 25, main = 'Encamped sequences in 24-hour ag window',
+     xaxt = 'n')
+axis(1, at = seq(2, 20, by = 2), las=2)
+hist(nonag.24.encamped$seq.length, breaks = 25, main = 'Encamped sequences outside window',
+     xaxt = 'n')
+axis(1, at = seq(2, 20, by = 2), las=2)
+
+#### 4.2 Test % Encamped between 6am - 6pm against 24-hour ag windows ####
+# define the period for staging assessment (6am - 6pm)
+test$stage.period <- ifelse(hour(test$date) >= 6 & hour(test$date) <= 18, 1, 0)
+
+# compare % encamped between 6am and 6pm during ag and non-ag 24-hour windows
+temp <- test %>% filter(stage.period == 1) %>%
+  group_by(day.index, ag.window.24, viterbi) %>%
+  summarise(n = n()) %>%
+  mutate(freq = n/sum(n)) %>%
+  group_by(ag.window.24, viterbi) %>%
+  summarise_at('freq', .funs = list(min=min, Q1=~quantile(., probs = 0.25),
+                                          median=median, Q3=~quantile(., probs = 0.75),
+                                          max=max))
+
+
+
+
+
+#### 4.3. Test Encamped Sequence distributions within ag phase windows  ####
 
 ## assign unique id to each ag window event
 # define unique id for window/non-window phases
+gme <- gme[!is.na(gme$ag.window),]
 eventFlag <- ifelse(gme$ag.window == 1, TRUE, FALSE)
 eventIndex <- inverse.rle(within.list(rle(eventFlag), 
                                           values[values] <- seq_along(values[values])))
 # remove IDs for the non-window phases
 gme$ag.window.index <- eventIndex
+
+# check 6am-6pm activity budgets 
+gme$stage.period <- ifelse(hour(gme$date) >= 6 & hour(gme$date) <= 18, 1, 0)
+
+temp <- gme %>% filter(stage.period == 1) %>%
+  group_by(ag.window, ag.window.index, viterbi) %>%
+  summarise(n = n()) %>%
+  mutate(freq = n/sum(n)) %>%
+  group_by(ag.window, viterbi) %>%
+  summarise_at('freq', .funs = list(min=min, Q1=~quantile(., probs = 0.25),
+                                    median=median, Q3=~quantile(., probs = 0.75),
+                                    max=max))
+
+# check encamped sequence runs
 window <- gme[gme$ag.window == 1,]
 nonwindow <- gme[gme$ag.window == 0,]
 
-# check encamped sequence runs
 split <- split(window, window$ag.window.index)
-split <- lapply(split, state.seq, state.name = 'seq')
+split <- lapply(split, state.seq, state.name = 'seq.length')
 window <- do.call(rbind, split)
 
-boxplot(window$seq ~ window$viterbi)
+nonwindow <- state.seq(nonwindow, state.name = 'seq.length')
+
+boxplot(window$seq.length ~ window$viterbi)
+
+window %>% group_by(viterbi) %>%
+  summarise_at('seq.length', .funs = list(min=min, Q1=~quantile(., probs = 0.25),
+                                          median=median, Q3=~quantile(., probs = 0.75),
+                                          max=max)) %>%
+  mutate(viterbi = c('encamped', 'meandering', 'dirwalk'))
+
+rbind(window, nonwindow) %>% group_by(ag.window, viterbi) %>%
+  summarise_at('seq.length', .funs = list(min=min, Q1=~quantile(., probs = 0.25),
+                                          median=median, Q3=~quantile(., probs = 0.75),
+                                          max=max)) %>%
+  mutate(viterbi = c('encamped', 'meandering', 'dirwalk'))
 
 
 ## Calculate staging numbers
@@ -225,8 +328,8 @@ ggplot(melt.ec, aes(y = value, color = variable)) + geom_point(aes(x = factor(ec
 #### 5. Re-run with optimal sequence lengths ####
 
 ## Tag stages
-split.tag <- lapply(split.seq, seq.tag, state = 1, window = 3, state.name = 'enc.seq')
-split.tag <- lapply(split.tag, seq.tag, state = 3, window = 1, state.name = 'dw.seq', ref = 1)
+split.tag <- lapply(split.seq, seq.tag, state = 1, window = 4, state.name = 'enc.seq')
+split.tag <- lapply(split.tag, seq.tag, state = 3, window = 0, state.name = 'dw.seq', ref = 1)
 split.stage <- lapply(split.tag, stage_id)
 
 
@@ -249,6 +352,10 @@ bind$stage.id <- paste(bind$id, bind$stage.session, sep = '-')
 bind.filter <- filter(bind, stage.session != 0) %>% droplevels()
 bind.ag <- filter(bind.filter, ag.window == 1)# %>%
   #group_by(stage.id) %>% filter(n() >= 5) # make sure staging groups are greater than 5 locs for MCP building
+
+
+sf <- st_as_sf(bind.ag, coords = c('x','y'), crs = 32736)
+mapview(sf)
 
 # Write gps locs for viewing in QGIS 
 #write.csv(bind.filter, './Staging Areas/events_all.csv' )
