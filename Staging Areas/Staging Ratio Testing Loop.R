@@ -91,25 +91,27 @@ tag_stage <- function(df, ratio.seq){
   
   table <- table %>%
     mutate(n.stage.ratio = n.stage.adj[2]/n.stage.adj[1]) %>%
-    mutate(n.stage.err = n.stage.adj[1]/sum(n.stage.adj))
+    mutate(n.stage.err = n.stage.adj[1]/sum(n.stage.adj)) 
   
   return(table)
 } 
 
-hr.start <- c(8:16) # hour start times (used in i loop)
-ratio.seq = seq(0.1, 5, 0.1) # sequence of possible E-M ratios (used in k loop)
+hr.start <- c(8:16) # hour start times (used in i loop) (i in 1:8)
+ratio.seq = seq(0.1, 10, 0.1) # sequence of possible E-M ratios (used in k loop)
 
+#hr.start <- c(6:18) # increase to all daylight hours (i in 1:11)
+#ratio.seq = seq(0.1, 13, 0.1) # sequence of possible E-M ratios (used in k loop)
 
-# Run the Loop! 
+#### Stage Test Loop ####
 system.time({
 
-stage.table <- NULL # store accuracy results (used in k loop)
-stage.table.list <- NULL
+# store each result in matrix
+result.matrix <- matrix(ncol = 8)
 
-for(i in 2:9){ # window size loop
+for(i in 1:8){ # window size loop - index adds to hr.start 
   
   # create matrix for possible start and end times 
-  hr.end <- hr.start + (i-1) #subtract 1 from current index for inclusive window size
+  hr.end <- hr.start + (i) #add i index to hr.start hour for inclusive window size (e.g. 6am fix represents before from 6-7am)
   hr.win <- subset(cbind(hr.start, hr.end), hr.end <= max(hr.start))
   
   for (j in 1:dim(hr.win)[1]) { # window period loop indexes the matrix row to define stage period
@@ -126,19 +128,103 @@ for(i in 2:9){ # window size loop
         mutate(ratio = ifelse(is.na(ratio), 0, ratio)) # for periods with all directed-walk
       
       
-      stage.table[[k]] <- tag_stage(gme.stage, ratio.seq[[k]])
+      stage.table <- tag_stage(gme.stage, ratio.seq[[k]])
       
       # add reference for window size and ratio
-      stage.table[[k]]$win.siz <- i
-      stage.table[[k]]$win.period <- paste(hr.win[j,1], hr.win[j,2], sep = '-')
+      stage.table$win.siz <- i
+      stage.table$win.period <- paste(hr.win[j,1], hr.win[j,2], sep = '-')
       
-    }
-  }
-  
-  
-  stage.table.list[[i]] <- stage.table
-  
-}
-})
+      # bind each stage.table
+      result.matrix <- rbind(result.matrix, as.matrix(stage.table))
+      
+    } # close k loop
+  } # close j loop
+} # close i loop
+}) # close system.time (175 minutes) -- what is increase when adding 4 hours and 4 extra ratios
+
+
+# convert matrix to dataframe for viz
+result.df <- as.data.frame(result.matrix)
+result.df <- mutate_at(result.df, c('ag.window.ext', 'n.stage', 'n.stage.adj', 'ratio.seq', 'n.stage.ratio',
+                                    'n.stage.err', 'win.siz'), .funs = as.numeric)
+result.df <- result.df[-1,]
+
+# remove repetitive sequences
+result.df <- result.df %>%
+  group_by(ag.window.ext) %>%
+  filter(n.stage > 2) %>%
+  mutate(n.stage.ratio = ifelse(n.stage.ratio == lag(n.stage.ratio), NA, n.stage.ratio)) %>%
+  mutate(n.stage.err = ifelse(n.stage.err == lag(n.stage.err), NA, n.stage.err))
+
+
+
+#### Plot Loop Results #### 
+
+t <- filter(result.df, !is.na(n.stage.err))
+
+ggplot(t, aes(x = ratio.seq, y = (1-n.stage.err), group = win.period)) + 
+  geom_line(aes(color = win.period)) + 
+  #geom_point(aes(color = win.period), position = 'jitter') + 
+  facet_wrap(.~win.siz)
+
+# Save result
+#saveRDS(result.matrix, 'stage_loop_result i = 2:12, hrstart=6:18, seq = 12.RDS')
+
+### 3D plot
+library(plotly)
+
+split <- split(result.df, result.df$win.siz)
+names(split) <- as.character(c(2:9))
+
+
+fig <- plot_ly(split$`4`, x = ~ratio.seq, y = ~win.period, z = ~(1-n.stage.err),
+               marker = list(color = ~n.stage, colorscale = c('#FFE1A1', '#683531'), showscale = TRUE))
+fig <- fig %>% add_markers()
+fig <- fig %>% layout(scene = list(xaxis = list(title = 'E-C ratio'),
+                                   yaxis = list(title = 'Window Period', type = 'category'),
+                                   zaxis = list(title = 'Accuracy')),
+                      annotations = list(
+                        x = 1.04,
+                        y = 1.02,
+                        text = 'Number of Stage Events',
+                        xref = 'paper',
+                        yref = 'paper',
+                        showarrow = TRUE
+                      ))
+fig
+
+fig %>% add_surface()
+
+
+
+
+#### Optimal Sequence Tagging ####
+
+gme$stage.period <- ifelse(hour(gme$date) >= 6 & hour(gme$date) <= 17, 1, 0)
+
+gme.stage <- gme %>%
+  filter(!is.na(ag.window.ext)) %>%
+  group_by(dayBurst, stage.period, ag.window.ext) %>%
+  mutate(enc.day = sum(viterbi==1), meander.day = sum(viterbi==2), dw.day = sum(viterbi==3), n.day = n()) %>%
+  mutate(ratio = enc.day/meander.day) %>%
+  mutate(ratio = ifelse(ratio == Inf, enc.day, ratio)) %>%
+  mutate(ratio = ifelse(is.na(ratio), 0, ratio)) # for periods with all directed-walk
+
+##### Tag staging events with optimal sequence #####
+ratio.threshold = 3
+
+# tag all staging events
+gme.stage$stage.event <- ifelse(gme.stage$ratio > ratio.threshold & gme.stage$stage.period == 1 & gme.stage$dw.day == 0, 1, 0)
+# tag ag staging events
+gme.stage$ag.stage.event <- ifelse(gme.stage$ratio > ratio.threshold & gme.stage$stage.period == 1 & gme.stage$dw.day == 0 & gme.stage$ag.window.ext == 1, 1, 0)
+
+## index staging events
+eventFlag <- ifelse(gme.stage$stage.event == 1, TRUE, FALSE)
+eventIndex <- inverse.rle(within.list(rle(eventFlag), 
+                                      values[values] <- seq_along(values[values])))
+# assign a unique event index for each stage event
+gme.stage$stage.event.index <- eventIndex
+
+unique(gme.stage$stage.event.index)
 
 
