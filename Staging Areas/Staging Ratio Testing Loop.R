@@ -100,7 +100,7 @@ tag_stage <- function(df, ratio.seq){
 #ratio.seq = seq(0.1, 10, 0.1) # sequence of possible E-M ratios (used in k loop)
 
 hr.start <- c(6:18) # increase to all daylight hours (i in 1:11)
-ratio.seq = seq(0.1, 13, 0.1) # sequence of possible E-M ratios (used in k loop)
+ratio.seq = seq(0.1, 14, 0.1) # sequence of possible E-M ratios (used in k loop)
 
 #### Stage Test Loop ####
 system.time({
@@ -108,7 +108,7 @@ system.time({
 # store each result in matrix
 result.matrix <- matrix(ncol = 8)
 
-for(i in 1:11){ # window size loop - index adds to hr.start 
+for(i in 1:12){ # window size loop - index adds to hr.start 
   
   # create matrix for possible start and end times 
   hr.end <- hr.start + (i) #add i index to hr.start hour for inclusive window size (e.g. 6am fix represents before from 6-7am)
@@ -142,6 +142,9 @@ for(i in 1:11){ # window size loop - index adds to hr.start
 } # close i loop
 }) # close system.time (175 minutes) -- what is increase when adding 4 hours and 4 extra ratios
 
+# Save/Read result
+saveRDS(result.matrix, 'stage_loop_result i = 1:12, hrstart=6:18, seq = 14.RDS')
+#result.matrix <- readRDS('stage_loop_result i = 1:8, hrstart=8:16, seq = 9.RDS')
 
 # convert matrix to dataframe for viz
 result.df <- as.data.frame(result.matrix)
@@ -167,8 +170,6 @@ ggplot(plot.df, aes(x = ratio.seq, y = (1-n.stage.err), group = win.period)) +
   #geom_point(aes(color = win.period), position = 'jitter') + 
   facet_wrap(.~win.siz)
 
-# Save result
-saveRDS(result.matrix, 'stage_loop_result i = 1:11, hrstart=8:16, seq = 13.RDS')
 
 ### 3D plot
 library(plotly)
@@ -242,8 +243,8 @@ ag.sp <- gme.stage[gme.stage$ag.stage.event == 1,]
 coordinates(ag.sp) <- ~x+y # create a SpatialPointsDataFrame
 proj4string(ag.sp) <- CRS("+init=epsg:32636") 
 
-# kde
-kde <- kernelUD(ag.sp[,'ag.stage.event'], h = 'href',
+# kde - eval h using LSCV
+kde <- kernelUD(ag.sp[,'ag.stage.event'], h = "LSCV",
                 kern = 'bivnorm', grid = 1000) # reference 
 
 #par(mfrow = c(2,2))
