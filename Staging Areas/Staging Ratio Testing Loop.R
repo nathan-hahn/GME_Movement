@@ -3,6 +3,7 @@
 library(tidyverse)
 library(lubridate)
 
+set.seed(52)
 
 # import state-classified data
 gme <- as.data.frame(data.table::fread("HMM/movdata/GMEcollars_003_HMMclassified_20201206.csv"))
@@ -18,7 +19,7 @@ gme <- do.call(rbind, split)
 gme <- gme[with(gme, order(uid)), ]
 
 ## define the period for staging assessment (10am - 2pm, 5 hrs)
-gme$stage.period <- ifelse(hour(gme$date) >= 10 & hour(gme$date) <= 14, 1, 0)
+#gme$stage.period <- ifelse(hour(gme$date) >= 10 & hour(gme$date) <= 14, 1, 0)
 # unique id for each individual-day
 gme$dayBurst <- paste(gme$id, as.Date(gme$date))
 
@@ -147,7 +148,7 @@ for(i in 1:11){ # window size loop - index adds to hr.start
 
 # Save/Read result
 saveRDS(result.matrix, 'stage_loop_result i = 1:11, hrstart=6:17, seq = 13.RDS')
-#result.matrix <- readRDS('stage_loop_result i = 1:8, hrstart=8:16, seq = 9.RDS')
+result.matrix <- readRDS('stage_loop_result i = 1:11, hrstart=6:17, seq = 13.RDS')
 
 # convert matrix to dataframe for viz
 result.df <- as.data.frame(result.matrix)
