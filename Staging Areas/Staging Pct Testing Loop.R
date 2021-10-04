@@ -4,6 +4,7 @@ library(tidyverse)
 library(lubridate)
 
 set.seed(52)
+setwd('~/Dropbox/CSU/GME_Movement') # for ssh
 
 # import state-classified data
 gme <- as.data.frame(data.table::fread("HMM/movdata/GMEcollars_003_HMMclassified_20201206.csv"))
@@ -145,126 +146,126 @@ for(i in 1:11){ # window size loop - index adds to hr.start
 }) # close system.time (175 minutes) -- what is increase when adding 4 hours and 4 extra ratios
 
 # Save/Read result
-saveRDS(result.matrix, 'stage_loop_result_pct i = 1:11, hrstart=6:18.RDS')
-result.matrix <- readRDS('stage_loop_result_pct i = 1:11, hrstart=6:18.RDS')
+saveRDS(result.matrix, 'stage_loop_result_pct i = 1:11, hrstart=6:18, seed52.RDS')
+#result.matrix <- readRDS('stage_loop_result_pct i = 1:11, hrstart=6:18.RDS')
 
-# convert matrix to dataframe for viz
-result.df <- as.data.frame(result.matrix)
-result.df <- mutate_at(result.df, c('ag.window.ext', 'n.stage', 'n.stage.adj', 'pct.seq', 'n.stage.ratio',
-                                    'n.stage.err', 'win.siz'), .funs = as.numeric)
-result.df <- result.df[-1,]
-
-# remove repetitive sequences
-result.df <- result.df %>%
-  group_by(ag.window.ext) %>%
-  filter(n.stage > 2) %>%
-  mutate(n.stage.ratio = ifelse(n.stage.ratio == lag(n.stage.ratio), NA, n.stage.ratio)) %>%
-  mutate(n.stage.err = ifelse(n.stage.err == lag(n.stage.err), NA, n.stage.err))
-
-
-
-#### Plot Loop Results #### 
-
-plot.df <- filter(result.df, !is.na(n.stage.err) & ag.window.ext == 1)
-
-ggplot(plot.df, aes(x = pct.seq, y = (1-n.stage.err), group = win.period)) + 
-  geom_line(aes(color = win.period)) + 
-  #geom_point(aes(color = win.period), position = 'jitter') + 
-  facet_wrap(.~win.siz)
-
-
-### 3D plot
-library(plotly)
-
-split <- split(plot.df, plot.df$win.siz)
-names(split) <- as.character(c(2:9))
-
-
-fig <- plot_ly(plot.df, x = ~ratio.seq, y = ~win.period, z = ~(1-n.stage.err),
-               marker = list(color = ~n.stage, colorscale = c('#FFE1A1', '#683531'), showscale = TRUE))
-fig <- fig %>% add_markers()
-fig <- fig %>% layout(scene = list(xaxis = list(title = 'E-C ratio'),
-                                   yaxis = list(title = 'Window Period', type = 'category'),
-                                   zaxis = list(title = 'Accuracy')),
-                      annotations = list(
-                        x = 1.04,
-                        y = 1.02,
-                        text = 'Number of Stage Events',
-                        xref = 'paper',
-                        yref = 'paper',
-                        showarrow = TRUE
-                      ))
-fig
-
-fig %>% add_surface()
-
-
-
-
-#### Optimal Sequence Tagging ####
-
-gme$stage.period <- ifelse(hour(gme$date) >= 10 & hour(gme$date) <= 14, 1, 0)
-
-gme.stage <- gme %>%
-  filter(!is.na(ag.window.ext)) %>%
-  group_by(dayBurst, stage.period, ag.window.ext) %>%
-  mutate(enc.day = sum(viterbi==1), meander.day = sum(viterbi==2), dw.day = sum(viterbi==3), n.day = n()) %>%
-  mutate(ratio = enc.day/meander.day) %>%
-  mutate(ratio = ifelse(ratio == Inf, enc.day, ratio)) %>%
-  mutate(ratio = ifelse(is.na(ratio), 0, ratio)) # for periods with all directed-walk
-
-##### Tag staging events with optimal sequence #####
-ratio.threshold = 1
-
-# tag all staging events
-gme.stage$stage.event <- ifelse(gme.stage$ratio > ratio.threshold & gme.stage$stage.period == 1 & gme.stage$dw.day == 0, 1, 0)
-# tag ag staging events
-gme.stage$ag.stage.event <- ifelse(gme.stage$ratio > ratio.threshold & gme.stage$stage.period == 1 & gme.stage$dw.day == 0 & gme.stage$ag.window.ext == 1, 1, 0)
-
-## index staging events
-eventFlag <- ifelse(gme.stage$stage.event == 1, TRUE, FALSE)
-eventIndex <- inverse.rle(within.list(rle(eventFlag), 
-                                      values[values] <- seq_along(values[values])))
-# assign a unique event index for each stage event
-gme.stage$stage.event.index <- eventIndex
-
-length(unique(gme.stage$stage.event.index))
-
-
-## Plot
-plot(gme.stage[gme.stage$ag.stage.event == 1,]$x, gme.stage[gme.stage$ag.stage.event == 1,]$y)
-
-
-## Ag Staging Density
-library(sp)
-library(adehabitatHR)
-library(raster)
-
-# create dataframe with all ag stage event relocs
-ag.sp <- gme.stage[gme.stage$ag.stage.event == 1,]
-coordinates(ag.sp) <- ~x+y # create a SpatialPointsDataFrame
-proj4string(ag.sp) <- CRS("+init=epsg:32636") 
-
-# kde
-kde <- kernelUD(ag.sp[,'ag.stage.event'], h = 'href',
-                kern = 'bivnorm', grid = 1000) # reference 
-
-#par(mfrow = c(2,2))
-for(i in 1:length(kde)){
-  rast <- raster(as(kde[[i]], "SpatialPixelsDataFrame"))
-  plot(rast, main = paste(names(kde[i])))
-}
-
-# get the UD
-ud <- getvolumeUD(kde)
-
-# plot on map
-library(mapview)
-rast <- raster(as(ud$`1`,"SpatialPixelsDataFrame"))
-rast[rast>99] <- NA
-mapview(rast) + mapview(ag.sp, cex = 1.5, layer.name = 'stage.locs') #change legend: layer.name = 'X47801a'
-
-
-
-
-
+# # convert matrix to dataframe for viz
+# result.df <- as.data.frame(result.matrix)
+# result.df <- mutate_at(result.df, c('ag.window.ext', 'n.stage', 'n.stage.adj', 'pct.seq', 'n.stage.ratio',
+#                                     'n.stage.err', 'win.siz'), .funs = as.numeric)
+# result.df <- result.df[-1,]
+# 
+# # remove repetitive sequences
+# result.df <- result.df %>%
+#   group_by(ag.window.ext) %>%
+#   filter(n.stage > 2) %>%
+#   mutate(n.stage.ratio = ifelse(n.stage.ratio == lag(n.stage.ratio), NA, n.stage.ratio)) %>%
+#   mutate(n.stage.err = ifelse(n.stage.err == lag(n.stage.err), NA, n.stage.err))
+# 
+# 
+# 
+# #### Plot Loop Results #### 
+# 
+# plot.df <- filter(result.df, !is.na(n.stage.err) & ag.window.ext == 1)
+# 
+# ggplot(plot.df, aes(x = pct.seq, y = (1-n.stage.err), group = win.period)) + 
+#   geom_line(aes(color = win.period)) + 
+#   #geom_point(aes(color = win.period), position = 'jitter') + 
+#   facet_wrap(.~win.siz)
+# 
+# 
+# ### 3D plot
+# library(plotly)
+# 
+# split <- split(plot.df, plot.df$win.siz)
+# names(split) <- as.character(c(2:9))
+# 
+# 
+# fig <- plot_ly(plot.df, x = ~ratio.seq, y = ~win.period, z = ~(1-n.stage.err),
+#                marker = list(color = ~n.stage, colorscale = c('#FFE1A1', '#683531'), showscale = TRUE))
+# fig <- fig %>% add_markers()
+# fig <- fig %>% layout(scene = list(xaxis = list(title = 'E-C ratio'),
+#                                    yaxis = list(title = 'Window Period', type = 'category'),
+#                                    zaxis = list(title = 'Accuracy')),
+#                       annotations = list(
+#                         x = 1.04,
+#                         y = 1.02,
+#                         text = 'Number of Stage Events',
+#                         xref = 'paper',
+#                         yref = 'paper',
+#                         showarrow = TRUE
+#                       ))
+# fig
+# 
+# fig %>% add_surface()
+# 
+# 
+# 
+# 
+# #### Optimal Sequence Tagging ####
+# 
+# gme$stage.period <- ifelse(hour(gme$date) >= 10 & hour(gme$date) <= 14, 1, 0)
+# 
+# gme.stage <- gme %>%
+#   filter(!is.na(ag.window.ext)) %>%
+#   group_by(dayBurst, stage.period, ag.window.ext) %>%
+#   mutate(enc.day = sum(viterbi==1), meander.day = sum(viterbi==2), dw.day = sum(viterbi==3), n.day = n()) %>%
+#   mutate(ratio = enc.day/meander.day) %>%
+#   mutate(ratio = ifelse(ratio == Inf, enc.day, ratio)) %>%
+#   mutate(ratio = ifelse(is.na(ratio), 0, ratio)) # for periods with all directed-walk
+# 
+# ##### Tag staging events with optimal sequence #####
+# ratio.threshold = 1
+# 
+# # tag all staging events
+# gme.stage$stage.event <- ifelse(gme.stage$ratio > ratio.threshold & gme.stage$stage.period == 1 & gme.stage$dw.day == 0, 1, 0)
+# # tag ag staging events
+# gme.stage$ag.stage.event <- ifelse(gme.stage$ratio > ratio.threshold & gme.stage$stage.period == 1 & gme.stage$dw.day == 0 & gme.stage$ag.window.ext == 1, 1, 0)
+# 
+# ## index staging events
+# eventFlag <- ifelse(gme.stage$stage.event == 1, TRUE, FALSE)
+# eventIndex <- inverse.rle(within.list(rle(eventFlag), 
+#                                       values[values] <- seq_along(values[values])))
+# # assign a unique event index for each stage event
+# gme.stage$stage.event.index <- eventIndex
+# 
+# length(unique(gme.stage$stage.event.index))
+# 
+# 
+# ## Plot
+# plot(gme.stage[gme.stage$ag.stage.event == 1,]$x, gme.stage[gme.stage$ag.stage.event == 1,]$y)
+# 
+# 
+# ## Ag Staging Density
+# library(sp)
+# library(adehabitatHR)
+# library(raster)
+# 
+# # create dataframe with all ag stage event relocs
+# ag.sp <- gme.stage[gme.stage$ag.stage.event == 1,]
+# coordinates(ag.sp) <- ~x+y # create a SpatialPointsDataFrame
+# proj4string(ag.sp) <- CRS("+init=epsg:32636") 
+# 
+# # kde
+# kde <- kernelUD(ag.sp[,'ag.stage.event'], h = 'href',
+#                 kern = 'bivnorm', grid = 1000) # reference 
+# 
+# #par(mfrow = c(2,2))
+# for(i in 1:length(kde)){
+#   rast <- raster(as(kde[[i]], "SpatialPixelsDataFrame"))
+#   plot(rast, main = paste(names(kde[i])))
+# }
+# 
+# # get the UD
+# ud <- getvolumeUD(kde)
+# 
+# # plot on map
+# library(mapview)
+# rast <- raster(as(ud$`1`,"SpatialPixelsDataFrame"))
+# rast[rast>99] <- NA
+# mapview(rast) + mapview(ag.sp, cex = 1.5, layer.name = 'stage.locs') #change legend: layer.name = 'X47801a'
+# 
+# 
+# 
+# 
+# 
