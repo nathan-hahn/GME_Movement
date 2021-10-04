@@ -9,10 +9,10 @@ library(lubridate)
 
 
 ##### LOAD DATA #####
-mep <- readRDS("./movdata/mep/MEPcollars_20200815_clean_2020-10-30.rds")
-metaMEP <- read.csv("./movdata/mep/MEPcollars_20200815_metadata.csv") 
+mep <- readRDS("./movdata/mep/MEPcollars_20211001_clean_2021-10-02.rds")
+metaMEP <- read.csv("./movdata/mep/MEPcollars_20211001_metadata.csv") 
 metaMEP$X <- NULL
-gr <- readRDS("./movdata/grumeti/GRcollars_20191231_clean_2020-06-25.rds")
+gr <- as.data.frame(data.table::fread("./movdata/grumeti/GRcollars_20210625_clean_2021-09-16.csv"))
 metaGR <- read.csv("./movdata/grumeti/GRcollars_20191231_metadata.csv")
 
 
@@ -25,10 +25,12 @@ mep <- mep %>%
          Fixtime = ymd_hms(Fixtime)) %>%
   rename(date = Fixtime)
 mep$n <- NULL
+mep$region_raw <- NULL
 mep.col.names <- colnames(mep)
 
 
 gr <- gr %>%
+  mutate(id = tolower(id)) %>%
   left_join(., metaGR, by = "id") %>%
   rename(subject_name = Name, subject_sex = Sex, subject_age = Age) %>%
   mutate(source_id = as.character(id), 
@@ -42,6 +44,9 @@ output <- bind_rows(mep, gr) %>%
   #filter(year(date) < 2020) %>%
   filter(region %in% c("serengeti", "masai mara")) %>%
   mutate(subject_sex = if_else(subject_sex %in% c("male", "M"), "male", "female"))
+
+# create a uid value for GME dataset
+output$uid <- c(1:(dim(output)[1]))
 
 
 ##### Tracking Summary #####
@@ -75,11 +80,11 @@ tracking.summary <- GME_summary(data = output)
 View(tracking.summary)
 
 ##### SAVE #####
-outfile <- paste0("./movdata/GMEcollars_003_clean_", Sys.Date(), ".rds" )
+outfile <- paste0("./movdata/GMEcollars_004_clean_", Sys.Date(), ".rds" )
 #write.csv(output, outfile)
 saveRDS(output, outfile)
 
-outfile <- paste0("./movdata/GMEsummary_003.csv" )
+outfile <- paste0("./movdata/GMEsummary_004.csv" )
 write.csv(tracking.summary, outfile)
 
 
