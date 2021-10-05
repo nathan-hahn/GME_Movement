@@ -11,7 +11,7 @@ library(dplyr)
 source("GME_functions.R")
 
 ##### Data Prep #####
-movdat <- readRDS('./movdata/GMEcollars_003_usedFilter_2020-10-30.rds')
+movdat <- readRDS('./movdata/GMEcollars_004_usedFilter_2021-10-05.rds')
 movdat$ag.used <- ifelse(movdat$lc.estes == 1, 1, 0) 
 
 ##### Add Crop-Based Year Cuts #####
@@ -21,8 +21,8 @@ movdat$ag.used <- ifelse(movdat$lc.estes == 1, 1, 0)
 # Yearly cuts - set april cut points
 year.cuts <- ymd_hms(c("2010-04-01 00:00:00", "2011-04-01 00:00:00", "2012-04-01 00:00:00", "2013-04-01 00:00:00", "2014-04-01 00:00:00", 
                        "2015-04-01 00:00:00", "2016-04-01 00:00:00", "2017-04-01 00:00:00", 
-                       "2018-04-01 00:00:00", "2019-04-01 00:00:00", "2020-04-01 00:00:00"), tz = 'Africa/Nairobi')
-year.names <- c("2010", "2011", '2012', "2013", "2014", "2015", "2016", "2017", "2018", "2019")
+                       "2018-04-01 00:00:00", "2019-04-01 00:00:00", "2020-04-01 00:00:00", "2021-04-01 00:00:00"), tz = 'Africa/Nairobi')
+year.names <- c("2010", "2011", '2012', "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020")
 # get yearly cuts using april cut points
 rng <- cut( movdat$date, breaks = c(year.cuts), include.lowest = T)
 rng.name <- cut(movdat$date, breaks = c(year.cuts), include.lowest = T, labels = year.names)
@@ -32,8 +32,11 @@ movdat$cut.date <- rng
 movdat$year.cuts <- rng.name
 movdat$month <- month(movdat$date)
 
+# check
+summary(movdat$year.cuts)
+
 # # export movdata with season and year cuts
-# saveRDS(roll.90, paste0('./GMM/movdata/GMEcollars_003_res90_', Sys.Date(),'.rds'))
+# saveRDS(movdat, paste0('./movdata/GMEcollars_004_usedFiltercuts_', Sys.Date(),'.rds'))
 
 # dataframe for fitting - add custom filters here as needed (e.g. region-specific)
 df <- movdat
