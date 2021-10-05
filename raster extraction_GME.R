@@ -17,7 +17,7 @@ library(raster)
 ####Prep data####
 
 # load RData
-df <- readRDS("./movdata/GMEcollars_003_clean_2020-10-30.rds")
+df <- readRDS("./movdata/GMEcollars_004_clean_2021-10-04.rds")
 df$date <- ymd_hms(df$date, tz = "Africa/Nairobi")
 # summarize relocs by individual  
 df %>%
