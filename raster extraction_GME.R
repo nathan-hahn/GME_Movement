@@ -129,7 +129,7 @@ used.df$merge_id <- NULL
 used.df$used <- 1
 
 ##### Adjust ag edge #####
-used.df$dist2agedge <- ifelse(used.df$lc.estes == 1, -(used.df$dist2agedge), used.df$dist2agedge)
+#used.df$dist2agedge <- ifelse(used.df$lc.estes == 1, -(used.df$dist2agedge), used.df$dist2agedge)
 
 
 ##########################################################################################
@@ -138,11 +138,11 @@ used.df$dist2agedge <- ifelse(used.df$lc.estes == 1, -(used.df$dist2agedge), use
 ####Export####
 
 # write to rds file
-outfile <- paste0("./movdata/GMEcollars_003_used_", Sys.Date(), ".rds")
+outfile <- paste0("./movdata/GMEcollars_004_used_", Sys.Date(), ".rds")
 saveRDS(used.df, outfile)
 
 # write to csv file
-outfile <- paste0("./movdata/GMEcollars_003_used_", Sys.Date(), ".csv")
+outfile <- paste0("./movdata/GMEcollars_004_used_", Sys.Date(), ".csv")
 write.csv(used.df, outfile)
 
 ########################################################################################################
