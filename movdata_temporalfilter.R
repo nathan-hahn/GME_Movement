@@ -3,7 +3,7 @@
 library(dplyr)
 library(lubridate)
 
-movdat <- readRDS('./movdata/GMEcollars_003_used_2020-10-30.rds')
+movdat <- readRDS('./movdata/GMEcollars_004_used_2021-10-05.rds')
 
 gr <- movdat %>%
   filter(site == "gr") %>%
@@ -17,13 +17,16 @@ mep <- movdat %>%
                                "Julia", "Ndorre", "Nkoidila", "Santiyan", "Earhart",
                                "Rudisha", "Naeku", "Olkeri", "ST2010-1441", "Rudisha"))) 
 
-# bind and limit up to 2019 data
+# bind and limit up to filterdate. 
+
+filterdate <- as.POSIXct('2021-04-01 00:00:00') # for gme_004, filter date is marked as latest ag cut date (april 1 2021)
+
 downsampled <- rbind(gr, mep) %>% 
-  filter(year(date) <= 2019) %>% droplevels()
+  filter(date < filterdate) %>% droplevels()
 max(downsampled$date)
 
 
-saveRDS(downsampled, paste0("./movdata/GMEcollars_003_usedFilter_", Sys.Date(),".rds"))
+saveRDS(downsampled, paste0("./movdata/GMEcollars_004_usedFilter_", Sys.Date(),".rds"))
 
 
 
