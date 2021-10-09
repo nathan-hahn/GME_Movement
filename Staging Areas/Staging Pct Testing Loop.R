@@ -4,7 +4,7 @@ library(tidyverse)
 library(lubridate)
 
 set.seed(1992)
-#setwd('~/Dropbox/CSU/GME_Movement') # for ssh
+setwd('~/Dropbox/CSU/GME_Movement') # for ssh
 
 # import state-classified data
 gme <- as.data.frame(data.table::fread("HMM/movdata/GMEcollars_003_HMMclassified_20201206.csv"))
@@ -77,9 +77,9 @@ ggplot(t.pct, aes(as.factor(hour), mean.pct)) + geom_pointrange(
 # stage tagging function (applied in k loop)
 tag_stage <- function(df, pct.seq){
   # tag all staging events
-  df$stage.event <- ifelse(df$pct >= pct.seq & df$stage.period == 1, 1, 0)
+  df$stage.event <- ifelse(df$pct == pct.seq & df$stage.period == 1, 1, 0)
   # tag ag staging events
-  df$ag.stage.event <- ifelse(df$pct >= pct.seq & df$stage.period == 1 & df$ag.window.ext == 1, 1, 0)
+  df$ag.stage.event <- ifelse(df$pct == pct.seq & df$stage.period == 1 & df$ag.window.ext == 1, 1, 0)
   
   ## index staging events
   eventFlag <- ifelse(df$stage.event == 1, TRUE, FALSE)
