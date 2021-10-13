@@ -82,7 +82,7 @@ eventWeight <- NULL
 gme.stage <- gme %>%
   filter(!is.na(ag.window.ext)) 
 
-for (i in 1:3) {
+for (i in 1:351) {
   pct.threshold = plot.df$pct.seq[i]
   win.size = plot.df$win.siz[i]
   gme.stage$stage.period <- ifelse(hour(gme.stage$date) >= plot.df$win.start[i] & hour(gme.stage$date) <= plot.df$win.end[i], 1, 0)
@@ -104,5 +104,18 @@ for (i in 1:3) {
   eventWeight[[i]] <- ifelse(ag.stage.event == 1, 1*(plot.df$n.stage.acc[i]), 0)
 }
 
+# plurality test
+df.vote <- as.data.frame(do.call(cbind, eventFlag))
+df.vote <- mutate_all(df.vote, function(x) ifelse(x==TRUE, 1, 0))
+df.vote$stagesum <- rowSums(df.vote)
+df.vote$plurality <- ifelse(df.vote$stagesum >= 50/2, 1, 0)
+
+table(df.vote$plurality)
+
+# weighted plurality test
 df.weight <- as.data.frame(do.call(cbind, eventWeight))
 df.weight$stagesum <- rowSums(df.weight)
+df.weight$plurality <- ifelse(df.weight$stagesum >= mean(df.weight$stagesum)/2, 1,0)
+
+table(df.weight$plurality)
+
