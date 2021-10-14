@@ -1,6 +1,5 @@
 #### Ensemble Learning ####
 
-
 library(tidyverse)
 library(lubridate)
 
@@ -104,18 +103,34 @@ for (i in 1:351) {
   eventWeight[[i]] <- ifelse(ag.stage.event == 1, 1*(plot.df$n.stage.acc[i]), 0)
 }
 
-# plurality test
+## majority vote test ##
 df.vote <- as.data.frame(do.call(cbind, eventFlag))
 df.vote <- mutate_all(df.vote, function(x) ifelse(x==TRUE, 1, 0))
+# tally votes
 df.vote$stagesum <- rowSums(df.vote)
-df.vote$plurality <- ifelse(df.vote$stagesum >= 50/2, 1, 0)
+# majority vote based on sums
+df.vote$majority <- ifelse(df.vote$stagesum >= 20/2, 1, 0)
 
-table(df.vote$plurality)
+# relocats in and outside stage
+table(df.vote$majority)
 
-# weighted plurality test
+## weighted majority vote test ##
 df.weight <- as.data.frame(do.call(cbind, eventWeight))
+# tally weighted votes
 df.weight$stagesum <- rowSums(df.weight)
-df.weight$plurality <- ifelse(df.weight$stagesum >= mean(df.weight$stagesum)/2, 1,0)
+# get mean vote value
+w.mu <- sum(df.weight$stagesum)/sum(!!df.weight$stagesum)
+# majority vote based on mean weight
+df.weight$majority <- ifelse(df.weight$stagesum >= w.mu, 1,0)
 
-table(df.weight$plurality)
+# relocs in and outside stage
+table(df.weight$majority)
+
+## Assign stage tags to relocs in the main dataset
+gme.stage$vote <- df.weight$majority
+
+# check distribution of stage relocs over the course of the day
+t <- filter(gme.stage, vote == 1)
+hist(hour(t$date), breaks = 13, main = 'frequency of stage relocations by hour of day')
+
 
