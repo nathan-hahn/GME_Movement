@@ -18,7 +18,7 @@ source('GME_functions.R')
 
 # Load cluster results table
 
-movdat <- readRDS('./GMM/movdata/GMEcollars_003_res90_2020-10-30.rds') 
+movdat <- readRDS('./movdata/GMEcollars_004_usedFiltercuts_2021-10-05.rds')
   
 mod <- readRDS('./GMM/results/mSelect_2020-10-30.rds')
 
@@ -83,7 +83,7 @@ for(i in 1:length(split)) {
 
 
 # plot predictions by season year
-par(mfrow = c(3,3))
+par(mfrow = c(3,4))
 for(i in 1:length(mod.predict)){
   mclust1Dplot(result[[i]]$mean.occupancy, z = mod.predict[[i]]$z, classification = mod.predict[[i]]$classification,
                what = "classification")
@@ -100,6 +100,8 @@ tactics.df <- do.call(rbind, result) %>%
                                 "3" = "Seasonal",
                                 "4" = "Habitual")) %>%
   filter(n > 500)
+
+tactics.df$ag.class.year <- factor(tactics.df$ag.class.year, levels = c("Rare", "Sporadic", "Seasonal", "Habitual"))
 
 ggplot(tactics.df, aes(ag.class.year, mean.occupancy)) + geom_boxplot() + 
   geom_point(shape = 15, color = 'dark grey', position = position_jitter(width = 0.21)) +

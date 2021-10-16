@@ -1,12 +1,17 @@
 ##### GMM Predict #####
 
+library(tidyverse)
+library(ggplot2)
+library(mclust)
+source("GME_functions.R")
+
 ## Get top model and movement data
 mSelect <- readRDS("./GMM/results/mSelect.rds")
-#movdat.filter <- readRDS('./movdata/GMEcollars_002_usedFilter_2020-06-20.rds')
+movdat.filter <- readRDS('./movdata/GMEcollars_004_usedFiltercuts_2021-10-05.rds')
 
 ##### Create data subsets #####
 # dataframe for fitting
-df <- temp.filter %>%
+df <- movdat.filter %>%
   mutate(ag.used = if_else(lc.estes == 1, 1, 0),
          month = month(date)) 
 # Mean Occ.
