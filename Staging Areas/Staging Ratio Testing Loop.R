@@ -3,8 +3,8 @@
 library(tidyverse)
 library(lubridate)
 
-set.seed(52)
-setwd('~/Dropbox/CSU/GME_Movement') # for ssh
+set.seed(15)
+#setwd('~/Dropbox/CSU/GME_Movement') # for ssh
 
 # import state-classified data
 gme <- as.data.frame(data.table::fread("HMM/movdata/GMEcollars_003_HMMclassified_20201206.csv"))
@@ -148,7 +148,8 @@ for(i in 1:11){ # window size loop - index adds to hr.start
 }) # close system.time (175 minutes) -- what is increase when adding 4 hours and 4 extra ratios
 
 # Save/Read result
-saveRDS(result.matrix, 'stage_loop_result i = 1:11, hrstart=6:17, seq = 13, seed52.RDS')
+saveRDS(result.matrix, 'stage_loop_result i = 1:11, hrstart=6:17, seq = 13, seed15.RDS')
+saveRDS(gme, 'stage_loop_result_ratio_df_15.RDS')
 #result.matrix <- readRDS('stage_loop_result i = 1:11, hrstart=6:17, seq = 13.RDS')
 
 # # convert matrix to dataframe for viz
@@ -166,13 +167,13 @@ saveRDS(result.matrix, 'stage_loop_result i = 1:11, hrstart=6:17, seq = 13, seed
 # 
 # 
 # 
-# #### Plot Loop Results #### 
+# #### Plot Loop Results ####
 # 
 # plot.df <- filter(result.df, !is.na(n.stage.err) & ag.window.ext == 1)
 # 
-# ggplot(plot.df, aes(x = ratio.seq, y = (1-n.stage.err), group = win.period)) + 
-#   geom_line(aes(color = win.period)) + 
-#   #geom_point(aes(color = win.period), position = 'jitter') + 
+# ggplot(plot.df, aes(x = ratio.seq, y = (1-n.stage.err), group = win.period)) +
+#   geom_line(aes(color = win.period)) +
+#   #geom_point(aes(color = win.period), position = 'jitter') +
 #   facet_wrap(.~win.siz)
 # 
 # 
@@ -226,7 +227,7 @@ saveRDS(result.matrix, 'stage_loop_result i = 1:11, hrstart=6:17, seq = 13, seed
 # 
 # ## index staging events
 # eventFlag <- ifelse(gme.stage$stage.event == 1, TRUE, FALSE)
-# eventIndex <- inverse.rle(within.list(rle(eventFlag), 
+# eventIndex <- inverse.rle(within.list(rle(eventFlag),
 #                                       values[values] <- seq_along(values[values])))
 # # assign a unique event index for each stage event
 # gme.stage$stage.event.index <- eventIndex
@@ -246,11 +247,11 @@ saveRDS(result.matrix, 'stage_loop_result i = 1:11, hrstart=6:17, seq = 13, seed
 # # create dataframe with all ag stage event relocs
 # ag.sp <- gme.stage[gme.stage$ag.stage.event == 1,]
 # coordinates(ag.sp) <- ~x+y # create a SpatialPointsDataFrame
-# proj4string(ag.sp) <- CRS("+init=epsg:32636") 
+# proj4string(ag.sp) <- CRS("+init=epsg:32636")
 # 
 # # kde - eval h using LSCV
 # kde <- kernelUD(ag.sp[,'ag.stage.event'], h = "LSCV",
-#                 kern = 'bivnorm', grid = 1000) # reference 
+#                 kern = 'bivnorm', grid = 1000) # reference
 # 
 # #par(mfrow = c(2,2))
 # for(i in 1:length(kde)){

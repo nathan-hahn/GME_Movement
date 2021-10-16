@@ -127,7 +127,8 @@ for(i in 1:11){ # window size loop - index adds to hr.start
       gme.stage <- gme %>%
         filter(!is.na(ag.window.ext)) %>%
         group_by(dayBurst, stage.period, ag.window.ext) %>%
-        mutate(enc.day = sum(viterbi==1), meander.day = sum(viterbi==2), dw.day = sum(viterbi==3), n.day = n()) %>%
+        #mutate(enc.day = sum(viterbi==1), meander.day = sum(viterbi==2), dw.day = sum(viterbi==3), n.day = n()) %>%
+        mutate(enc.day = sum(viterbi==1), meander.day = sum(viterbi==2), dw.day = sum(viterbi==3), n.day = sum(enc.day+meander.day+dw.day)) %>%
         mutate(pct = enc.day/n())
       
       
@@ -146,7 +147,7 @@ for(i in 1:11){ # window size loop - index adds to hr.start
 }) # close system.time (175 minutes) -- what is increase when adding 4 hours and 4 extra ratios
 
 # Save/Read result
-saveRDS(result.matrix, 'stage_loop_result_pct i = 1:11, hrstart=6:17, seed1992.RDS')
+saveRDS(result.matrix, 'stage_loop_result_pct i = 1:11, hrstart=6:17, seed1992, equals.RDS')
 saveRDS(gme, 'stage_loop_result_pct_df_1992.RDS')
 #result.matrix <- readRDS('stage_loop_result_pct i = 1:11, hrstart=6:18.RDS')
 
