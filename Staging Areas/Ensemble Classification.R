@@ -19,7 +19,7 @@
 #' The following code evaluates the results of the algorithm and uses weighted majority voting to produce an ensemble
 #' classification of staging events.
 
-##### Set up results dataframe #####
+##### Set up results dataframe #####d
 library(tidyverse)
 library(lubridate)
 
