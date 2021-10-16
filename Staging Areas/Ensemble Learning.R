@@ -1,8 +1,7 @@
-#### Stage Tagging Using Ensemble Learning ####
+#' #### Stage Tagging Using Ensemble Classification ####
 
-#' Aim of study is to define staging behavior prior to crop raiding from the movement track and movement 
-#' behaviors, and use these staging events to investigate behavioral and landscape factors that facilitate or 
-#' disuade the use of staging for crop raiding. 
+#' The aim is to define staging behavior prior to crop raiding from the movement track and use these staging 
+#' events to investigate behavioral and landscape factors that facilitate the use of staging for crop raiding. 
 #' 
 #' We developed an algorithm to distinguish staging prior to agricultural use based on three parameters: 1) The 
 #' start and end time of the stage; 2) the size of the staging window; and 3) the percentage of encamped 
@@ -14,17 +13,17 @@
 #' any directed-walk movements during the staging event.
 #' 
 #' We tested all possible combinations of the three parameters and calculated the accuracy of each parameter set.
-#' Accuracy was calculated by comparing the total number of staging events it identified to the number 
+#' Accuracy was calculated by comparing the total number of events the algorithm identified to the number 
 #' of staging events that preceded agricultural use by elephants. 
 #' 
-#' The following code evaluates the results of these tests and uses weighted majority voting to produce an ensemble
+#' The following code evaluates the results of the algorithm and uses weighted majority voting to produce an ensemble
 #' classification of staging events.
-#' 
 
-# TODO: accuracy with ensemble model - any better?? 
-
+##### Set up results dataframe #####
 library(tidyverse)
 library(lubridate)
+
+setwd('~/Dropbox (Personal)/CSU/GME_Movement')
 
 # import algorithm results matrix
 result.matrix <- readRDS('stage_loop_result_pct T2.1 seq0 GME_004.RDS')
@@ -58,9 +57,8 @@ ggplot(plot.df, aes(x = pct.seq, y = (1-n.stage.err), group = as.factor(win.star
 
 ## Plot accuracy by start and end of window
 par(mfrow = c(1,2))
-boxplot((1-plot.df$n.stage.err) ~ plot.df$win.start)
-boxplot((1-plot.df$n.stage.err) ~ plot.df$win.end)
-
+boxplot((1-plot.df$n.stage.err) ~ plot.df$win.start, xlab = 'window start time', ylab = 'accuracy')
+boxplot((1-plot.df$n.stage.err) ~ plot.df$win.end, xlab = 'window end time', ylab = 'accuracy')
 
 #' #### Tag Stage Events ####
 #' Use ensemble learning approach to tag staging events based on the full set of 
@@ -70,7 +68,7 @@ boxplot((1-plot.df$n.stage.err) ~ plot.df$win.end)
 ##### Import dataset #####
 
 # import dataset
-gme <- as.data.frame(data.table::fread('./Staging Areas/GMEcollars_004_HMMclassified_stage_20201012.csv'))
+gme <- as.data.frame(data.table::fread('~/Dropbox (Personal)/CSU/GME_Movement/Staging Areas/GMEcollars_004_HMMclassified_stage_20201012.csv'))
 
 ## unique id for each individual-day
 gme$dayBurst <- paste(gme$id, as.Date(gme$date))
@@ -78,39 +76,33 @@ gme$dayBurst <- paste(gme$id, as.Date(gme$date))
 ## 24-hour ag window identifies days where they used ag - dayburst helps group by day and individual 
 gme <- gme %>%
   group_by(dayBurst) %>%
-  mutate(ag.window.ext = ifelse(sum(ag.window) >= 1, 1, 0)) # if ag.window identifies ag use phase, classify that day as ag use. Helps to pick up stages at the beginning of an ag use phase that might otherwise be split up.
+  mutate(ag.window.ext = if_else(sum(ag.window) >= 1, 1, 0)) # if ag.window identifies ag use phase, classify that day as ag use. Helps to pick up stages at the beginning of an ag use phase that might otherwise be split up.
 
 ## assign unique id to each ag window event
 # define unique id for window/non-window phases
-gme <- gme[!is.na(gme$ag.window),]
-eventFlag <- ifelse(gme$ag.window == 1, TRUE, FALSE)
-eventIndex <- inverse.rle(within.list(rle(eventFlag), 
-                                      values[values] <- seq_along(values[values])))
+gme <- gme[!is.na(gme$ag.window.ext),]
+eventIndex <- ifelse(gme$ag.window.ext == 1, gme$dayBurst, 0)
 # assign event index
 gme$ag.window.index <- eventIndex
 
-#' Using the movement dataset, 
-
-##### Ensemble Voting ####
+#' ##### Ensemble Voting #####
 
 #' Ensemble approach uses weighted voting to evaluate each GPS relocation and tag 
 #' it as stage or non-stage. Each model gets a vote which is weighted by it's 
 #' accuracy. Relocations with a vote total greater than the mean is tagged as a 
 #' stage.
 
+##### Ensemble Voting #####
+
 # prep plot.df and create empty lists
-plot.df <- arrange(result.df, n.stage.err) # order by descending error
+plot.df <- arrange(plot.df, n.stage.err) # order by descending error
 plot.df$n.stage.acc <- 1-plot.df$n.stage.err # accuracy = 1-error
 eventFlag <- NULL # TRUE/FALSE whether a relocation is part of a stage
 eventIndex <- NULL # Unique ID for stage event
 eventWeight <- NULL # Accuracy of the specific model, to be used for weighting
 
-# filter to ag.windows only -- or do on all stages to assess if accuracy improved??
-gme.stage <- gme %>%
-  filter(!is.na(ag.window.ext)) 
-
-# TEMP
-#gme.stage <- gme
+# create new dataframe
+gme.stage <- gme
 
 for (i in 1:dim(plot.df)[1]) { # voting by row of plot.df -- row corresponds with the parameter set and accuracy for each model
   pct.threshold = plot.df$pct.seq[i]
@@ -134,7 +126,7 @@ for (i in 1:dim(plot.df)[1]) { # voting by row of plot.df -- row corresponds wit
   eventWeight[[i]] <- ifelse(ag.stage.event == 1, 1*(plot.df$n.stage.acc[i]), 0)
 }
 
-#' The resulting dataframe has a column for each model (354) and each row corresponds
+#' The resulting dataframe has a column for each model (418) and each row corresponds
 #' to a GPS relocation. If a stage is detected for a given model, the vote value 
 #' is tied to the model's accuracy for weighting (1*model.accuracy). 
 
@@ -153,17 +145,20 @@ df.weight$majority <- ifelse(df.weight$stagesum > w.mu, 1,0)
 # relocs in and outside stage
 table(df.weight$majority)
 
-#' Check the hourly distribution of staging relocations
-
 ## Assign stage tags to relocs in the main dataset
 gme.stage$vote <- df.weight$majority
+
+#' ##### Staging Area Data Summaries
+
+#' Check the hourly distribution of staging relocations
 
 # check distribution of stage relocs over the course of the day
 t <- filter(gme.stage, vote == 1) %>%
   group_by(hour(date)) %>% tally()
-ggplot(t, aes(as.factor(`hour(date)`), n)) + geom_bar(stat = 'identity')
+ggplot(t, aes(as.factor(`hour(date)`), n)) + geom_bar(stat = 'identity') +
+  xlab('hour of day') + ylab('n stage relocations')
 
-#' Calculate the total number of stage events in the dataset
+#' The total number of stage events in the dataset is 5692.
 
 ## index staging events
 eventFlag <- ifelse(gme.stage$vote == 1, TRUE, FALSE)
@@ -173,24 +168,50 @@ gme.stage$stage.event.index <- eventIndex
 
 length(unique(gme.stage$stage.event.index))
 
-#' Calculate distribution of staging frequency prior to crop raiding among individuals
+#' Calculate distribution of staging frequency prior to crop raiding among individuals. 
 
-# summarise
-
-stage.ind <- gme.stage %>%
+# summarise overall % staging distribution
+stage.summary <- gme.stage %>%
   group_by(subject_name) %>%
+  summarise(n.stage = length(unique(stage.event.index)),
+            n.raid = length(unique(ag.window.index)),
+            pct.stage = n.stage/n.raid) 
+
+summary(stage.summary$pct.stage)
+
+#' Summarise staging frequency distribution by individual and tactic. Use yearly tactics (n=101) 
+#' Note the Rare group with 100% stage percentages have very small numbers of 
+#' stages. See the end of the script for data summary.
+
+# summarise % staging distribution by individual-year tactic
+stage.summary <- gme.stage %>%
+  group_by(subject_name, tactic.season) %>%
   summarise(n.stage = length(unique(stage.event.index)),
             n.raid = length(unique(ag.window.index)),
             pct.stage = n.stage/n.raid)
 
-boxplot(stage.ind$pct.stage)
+boxplot(stage.summary$pct.stage ~ stage.summary$tactic.season,
+        main = 'distribution of % staging by individuals in the 4 tactics',
+        xlab = 'Tactics (Rare to Habitual)', ylab = 'Pct. of Raids with a Stage')
 
-# plot on a map
-t <- filter(gme.stage, vote == 1)
-plot(t$x, t$y)
+#' ##### Plot the data on a map
 
+##### Plot Staging Events #####
+library(sf)
+gme <- sf::st_read('~/Dropbox (Personal)/CSU/GME_Movement/spatial data/GSE/GSE_2020.shp') 
+stage.relocs <- filter(gme.stage, vote == 1)
 
+ggplot(data = gme) + geom_sf() + coord_sf(datum=st_crs(32736)) + 
+  geom_point(data = stage.relocs, aes(x, y, color = 'red'), size = 0.2, alpha = 0.2) +
+  labs(color = 'staging relocations')
 
+#' Table of staging events and ag bouts for each individual-year
+stage.summary <- gme.stage %>%
+  group_by(subject_name, tactic.season) %>%
+  summarise(n.stage = length(unique(stage.event.index)),
+            n.raid = length(unique(ag.window.index)),
+            pct.stage = n.stage/n.raid)
+(stage.summary)
 
 
 
