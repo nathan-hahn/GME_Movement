@@ -38,6 +38,7 @@ summary(movdat$year.cuts)
 # # export movdata with season and year cuts
 # saveRDS(movdat, paste0('./movdata/GMEcollars_004_usedFiltercuts_', Sys.Date(),'.rds'))
 
+
 # dataframe for fitting - add custom filters here as needed (e.g. region-specific)
 df <- movdat
   
