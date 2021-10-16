@@ -1,58 +1,76 @@
-#### Ensemble Learning ####
+#### Stage Tagging Using Ensemble Learning ####
+
+#' Aim of study is to define staging behavior prior to crop raiding from the movement track and movement 
+#' behaviors, and use these staging events to investigate behavioral and landscape factors that facilitate or 
+#' disuade the use of staging for crop raiding. 
+#' 
+#' We developed an algorithm to distinguish staging prior to agricultural use based on three parameters: 1) The 
+#' start and end time of the stage; 2) the size of the staging window; and 3) the percentage of encamped 
+#' relocations inside the time window. We hypothesized that staging events should have a higher percentage of 
+#' encamped relocations than normal because 24-hour activity budgets suggested that elephants were increasing 
+#' their encamped and meandering movements during the day when in crop raiding bouts. Additionally, we restricted 
+#' possible start and end times between 6am and 6pm because 24-hour activity budgets suggested that elephants were 
+#' increasing their encamped movements during this time. We also restricted the staging definition to exclude 
+#' any directed-walk movements during the staging event.
+#' 
+#' We tested all possible combinations of the three parameters and calculated the accuracy of each parameter set.
+#' Accuracy was calculated by comparing the total number of staging events it identified to the number 
+#' of staging events that preceded agricultural use by elephants. 
+#' 
+#' The following code evaluates the results of these tests and uses weighted majority voting to produce an ensemble
+#' classification of staging events.
+#' 
+
+# TODO: accuracy with ensemble model - any better?? 
 
 library(tidyverse)
 library(lubridate)
 
-# import results matrix
-result.matrix <- readRDS('stage_loop_result_pct T2.1 GME_004.RDS')
+# import algorithm results matrix
+result.matrix <- readRDS('stage_loop_result_pct T2.1 seq0 GME_004.RDS')
 
 # convert matrix to dataframe for viz
 result.df <- as.data.frame(result.matrix)
 result.df <- mutate_at(result.df, c('ag.window.ext', 'n.stage', 'n.stage.adj', 'pct.seq', 'n.stage.ratio',
                                     'n.stage.err', 'win.siz'), .funs = as.numeric)
+result.df$win.start <- as.numeric(unlist(lapply(strsplit(as.character(result.df$win.period), "\\-"), "[", 1)))
+result.df$win.end <- as.numeric(unlist(lapply(strsplit(as.character(result.df$win.period), "\\-"), "[", 2)))
+
 result.df <- result.df[-1,]
 
 # remove repetitive sequences
 result.df <- result.df %>%
-  group_by(ag.window.ext) %>%
-  filter(n.stage > 2) %>%
-  mutate(n.stage.ratio = ifelse(n.stage.ratio == lag(n.stage.ratio), NA, n.stage.ratio)) %>%
-  mutate(n.stage.err = ifelse(n.stage.err == lag(n.stage.err), NA, n.stage.err))
+  #filter out repeated sequences
+  group_by(n.stage.err) %>%
+  filter(pct.seq == max(pct.seq))
 
 #### Plot Loop Results ####
 
-plot.df <- filter(result.df, !is.na(n.stage.err) & ag.window.ext == 1)
-plot.df$win.start <- as.numeric(unlist(lapply(strsplit(as.character(plot.df$win.period), "\\-"), "[", 1)))
-plot.df$win.end <- as.numeric(unlist(lapply(strsplit(as.character(plot.df$win.period), "\\-"), "[", 2)))
+plot.df <- filter(result.df, ag.window.ext == 1)
 
 ggplot(plot.df, aes(x = pct.seq, y = (1-n.stage.err), group = as.factor(win.start))) +
   geom_line(aes(color = as.factor(win.start))) +
-  #geom_point(aes(color = win.period), position = 'jitter') +
+  #geom_point(aes(shape = as.factor(win.end))) +
   facet_wrap(.~win.siz)
+
+#' Based on the apparent trend of higher staging accuracy in the middle of the day,
+#' plot the accuracy as a function of window start (left) and end (right) time. 
 
 ## Plot accuracy by start and end of window
 par(mfrow = c(1,2))
-plot(as.numeric(plot.df$win.start), (1-plot.df$n.stage.err))
-plot(as.numeric(plot.df$win.end), (1-plot.df$n.stage.err))
-
 boxplot((1-plot.df$n.stage.err) ~ plot.df$win.start)
 boxplot((1-plot.df$n.stage.err) ~ plot.df$win.end)
 
-#### Tag Staging Events for Each Parameter Set ####
+
+#' #### Tag Stage Events ####
+#' Use ensemble learning approach to tag staging events based on the full set of 
+#' candidate models. First, import the movement dataset and specify a variable
+#' for 24-hour ag windows. These 1/0 events are then indexed as unique events.
+
+##### Import dataset #####
 
 # import dataset
-set.seed(1992)
-gme <- as.data.frame(data.table::fread("HMM/movdata/GMEcollars_004_HMMclassified_20211012.csv"))
-colnames(gme)[1] <- 'uid'
-unique(gme$subject_name)
-
-# filter out outlier steps 
-split <- split(gme, gme$viterbi)
-split[[1]] <- filter(split[[1]], dist <= median((split[[2]]$dist + runif(1, -200, 200)), na.rm = T))
-split[[2]] <- filter(split[[2]], dist <= median((split[[3]]$dist + runif(1, -200, 200)), na.rm = T))
-split[[3]] <- filter(split[[3]], dist >= median((split[[2]]$dist + runif(1, -200, 200)), na.rm = T))
-gme <- do.call(rbind, split)
-gme <- gme[with(gme, order(uid)), ]
+gme <- as.data.frame(data.table::fread('./Staging Areas/GMEcollars_004_HMMclassified_stage_20201012.csv'))
 
 ## unique id for each individual-day
 gme$dayBurst <- paste(gme$id, as.Date(gme$date))
@@ -71,17 +89,30 @@ eventIndex <- inverse.rle(within.list(rle(eventFlag),
 # assign event index
 gme$ag.window.index <- eventIndex
 
-##### Tag staging events with optimal sequence #####
-plot.df <- arrange(plot.df, n.stage.err)
-plot.df$n.stage.acc <- 1-plot.df$n.stage.err
-eventFlag <- NULL
-eventIndex <- NULL
-eventWeight <- NULL
+#' Using the movement dataset, 
 
+##### Ensemble Voting ####
+
+#' Ensemble approach uses weighted voting to evaluate each GPS relocation and tag 
+#' it as stage or non-stage. Each model gets a vote which is weighted by it's 
+#' accuracy. Relocations with a vote total greater than the mean is tagged as a 
+#' stage.
+
+# prep plot.df and create empty lists
+plot.df <- arrange(result.df, n.stage.err) # order by descending error
+plot.df$n.stage.acc <- 1-plot.df$n.stage.err # accuracy = 1-error
+eventFlag <- NULL # TRUE/FALSE whether a relocation is part of a stage
+eventIndex <- NULL # Unique ID for stage event
+eventWeight <- NULL # Accuracy of the specific model, to be used for weighting
+
+# filter to ag.windows only -- or do on all stages to assess if accuracy improved??
 gme.stage <- gme %>%
   filter(!is.na(ag.window.ext)) 
 
-for (i in 1:351) {
+# TEMP
+#gme.stage <- gme
+
+for (i in 1:dim(plot.df)[1]) { # voting by row of plot.df -- row corresponds with the parameter set and accuracy for each model
   pct.threshold = plot.df$pct.seq[i]
   win.size = plot.df$win.siz[i]
   gme.stage$stage.period <- ifelse(hour(gme.stage$date) >= plot.df$win.start[i] & hour(gme.stage$date) <= plot.df$win.end[i], 1, 0)
@@ -103,34 +134,63 @@ for (i in 1:351) {
   eventWeight[[i]] <- ifelse(ag.stage.event == 1, 1*(plot.df$n.stage.acc[i]), 0)
 }
 
-## majority vote test ##
-df.vote <- as.data.frame(do.call(cbind, eventFlag))
-df.vote <- mutate_all(df.vote, function(x) ifelse(x==TRUE, 1, 0))
-# tally votes
-df.vote$stagesum <- rowSums(df.vote)
-# majority vote based on sums
-df.vote$majority <- ifelse(df.vote$stagesum >= 20/2, 1, 0)
-
-# relocats in and outside stage
-table(df.vote$majority)
+#' The resulting dataframe has a column for each model (354) and each row corresponds
+#' to a GPS relocation. If a stage is detected for a given model, the vote value 
+#' is tied to the model's accuracy for weighting (1*model.accuracy). 
 
 ## weighted majority vote test ##
+# create dataframe
 df.weight <- as.data.frame(do.call(cbind, eventWeight))
+dim(df.weight)
+
 # tally weighted votes
 df.weight$stagesum <- rowSums(df.weight)
-# get mean vote value
+# get mean vote value for majority voting
 w.mu <- sum(df.weight$stagesum)/sum(!!df.weight$stagesum)
-# majority vote based on mean weight
-df.weight$majority <- ifelse(df.weight$stagesum >= w.mu, 1,0)
+# tag ensemble stage events
+df.weight$majority <- ifelse(df.weight$stagesum > w.mu, 1,0)
 
 # relocs in and outside stage
 table(df.weight$majority)
+
+#' Check the hourly distribution of staging relocations
 
 ## Assign stage tags to relocs in the main dataset
 gme.stage$vote <- df.weight$majority
 
 # check distribution of stage relocs over the course of the day
+t <- filter(gme.stage, vote == 1) %>%
+  group_by(hour(date)) %>% tally()
+ggplot(t, aes(as.factor(`hour(date)`), n)) + geom_bar(stat = 'identity')
+
+#' Calculate the total number of stage events in the dataset
+
+## index staging events
+eventFlag <- ifelse(gme.stage$vote == 1, TRUE, FALSE)
+eventIndex <- inverse.rle(within.list(rle(eventFlag),
+                                           values[values] <- seq_along(values[values])))
+gme.stage$stage.event.index <- eventIndex
+
+length(unique(gme.stage$stage.event.index))
+
+#' Calculate distribution of staging frequency prior to crop raiding among individuals
+
+# summarise
+
+stage.ind <- gme.stage %>%
+  group_by(subject_name) %>%
+  summarise(n.stage = length(unique(stage.event.index)),
+            n.raid = length(unique(ag.window.index)),
+            pct.stage = n.stage/n.raid)
+
+boxplot(stage.ind$pct.stage)
+
+# plot on a map
 t <- filter(gme.stage, vote == 1)
-hist(hour(t$date), breaks = 13, main = 'frequency of stage relocations by hour of day')
+plot(t$x, t$y)
+
+
+
+
 
 
