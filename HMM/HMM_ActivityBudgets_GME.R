@@ -24,8 +24,8 @@ library(adehabitatLT)
 source('GME_functions.R')
 
 ##### Prep Data #####
-hmm.df <- readRDS('m8_pop_003.rds') # output from hmm model (global)
-output <- readRDS("./HMM/GMEcollars_003_population_original.rds") # dataset prior to data transforms
+hmm.df <- readRDS('m_pop_GME_004.rds') # output from hmm model (global)
+output <- readRDS("./HMM/GMEcollars_004_population_original.rds") # dataset prior to data transforms
 
 # add viterbi estimates to the original dataframe -- revert to non-standardized covs and steps
 output$viterbi <- viterbi(hmm.df)
@@ -35,7 +35,7 @@ output$viterbi <- viterbi(hmm.df)
 # df <- as.data.frame(t[[1]])
 # output <- cbind(output, df)
 
-# create new varibles to differentiate ag and non-ag in non-protected areas
+# create new variables to differentiate ag and non-ag in non-protected areas
 output$ag.used <- ifelse(output$lc.estes == 1, 1, 0)
 output$pa <- factor(output$pa, levels = c(3:1))
 
@@ -62,7 +62,7 @@ system.time({
 
 output <- do.call("rbind", merge)
 
-write.csv(output, "./HMM/movdata/GMEcollars_003_HMMclassified_20201206.csv")
+write.csv(output, "./HMM/movdata/GMEcollars_004_HMMclassified_20211012.csv")
 
 
 ##### Activity Budgets #####
@@ -92,7 +92,7 @@ t <- output.plot %>%
 library(DescTools)
 ag.budget <- t %>%
   group_by(tactic.season, ag.window) %>%
-  summarize(pct = n/sum(n)) %>%
+  summarize(pct = n/sum(n))
   
 ag.budget$state <- t$viterbi
 

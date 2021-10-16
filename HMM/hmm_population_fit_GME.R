@@ -14,7 +14,7 @@ library(forcats)
 Sys.setenv(TZ="Africa/Nairobi") 
 
 
-pop.log.veloc <- readRDS("./HMM/GMEcollars_003_population_logVeloc.rds")
+pop.log.veloc <- readRDS("./HMM/GMEcollars_004_population_logVeloc.rds")
 
 #' ---- Specify parameters ---- 
 

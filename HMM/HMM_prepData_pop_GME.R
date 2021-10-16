@@ -8,7 +8,7 @@ source("./GME_functions.R")
 #' ---- Prep data for HMM population model fitting ----
 
 # Add data with raster covariates. 
-used.all <- readRDS("./GMM/movdata/GMEcollars_003_usedClust_2020-10-30.rds")
+used.all <- readRDS("./movdata/GMEcollars_004_usedClust_2021-10-05.rds")
 #used.all <- used.all[!is.na(used.all$x),]
 used.all <- used.all %>%
   filter(fixType != "irregular") %>%
@@ -47,6 +47,10 @@ used.all <- filter(used.all, burst %in% t$burst) %>% droplevels()
 
 
 #' ---- Standardize Covariates ----
+
+##### Adjust ag edge #####
+used.all$dist2agedge <- ifelse(used.all$lc.estes == 1, -(used.all$dist2agedge), used.all$dist2agedge)
+
 # standardize covariates
 cor.vars <- c("dist2ag", "dist2agedge", "dist2forest", "dist2water", "dist2permwater","dist2seasonalwater", "slope")
 st.covs <- used.all %>%
@@ -68,7 +72,7 @@ used.st <- used.all %>%
   dplyr::select(-cor.vars) %>%
   bind_cols(., st.covs) %>%
   rename(ID = burst) %>% #for HMM package
-  dplyr::select(ID, x, y, date, all_of(cor.vars), gHM) %>%
+  dplyr::select(ID, x, y, date, all_of(cor.vars), gHM, subject_name) %>%
   droplevels()
 # must be a dataframe to work!! 
 used.st <- as.data.frame(used.st)
@@ -81,19 +85,20 @@ used.st <- as.data.frame(used.st)
 
 # Create objects for the MomentuHMM package: step, log step, velocity, log velocity 
 library(momentuHMM)
+library(rlist)
 
-ele.step <- prepData(data = used.st, coordNames = c("x", "y"), covNames = cor.vars)
+ele.step <- prepData(data = used.st, coordNames = c("x", "y"), covNames = c(cor.vars, 'subject_name', 'gHM'))
 split <- split(ele.step, ele.step$ID)
 
 individual.velocity <- lapply(split, log_velocity)
 population.velocity <- do.call("rbind", individual.velocity)
 
 # save as rdata for us on secondary machines
-saveRDS(individual.velocity, "./HMM/GMEcollars_003_individual_logVeloc.rds")
-saveRDS(population.velocity, "./HMM/GMEcollars_003_population_logVeloc.rds")
+saveRDS(individual.velocity, "./HMM/GMEcollars_004_individual_logVeloc.rds")
+saveRDS(population.velocity, "./HMM/GMEcollars_004_population_logVeloc.rds")
 
 # save original dataframe to attach after fitting
-saveRDS(used.all, "./HMM/GMEcollars_003_population_original.rds")
+saveRDS(used.all, "./HMM/GMEcollars_004_population_original.rds")
 
 
 
