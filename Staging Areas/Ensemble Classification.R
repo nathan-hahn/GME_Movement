@@ -50,7 +50,9 @@ plot.df <- filter(result.df, ag.window.ext == 1)
 ggplot(plot.df, aes(x = pct.seq, y = (1-n.stage.err), group = as.factor(win.start))) +
   geom_line(aes(color = as.factor(win.start))) +
   #geom_point(aes(shape = as.factor(win.end))) +
-  facet_wrap(.~win.siz)
+  facet_wrap(.~win.siz) +
+  xlab('pct encamped in window') + ylab('accuracy') + labs(color = 'window start time') +
+  ggtitle('Algorithm accuracy stratified by window size (hours)')
 
 #' Based on the apparent trend of higher staging accuracy in the middle of the day,
 #' plot the accuracy as a function of window start (left) and end (right) time. 
@@ -191,7 +193,7 @@ stage.summary <- gme.stage %>%
             pct.stage = n.stage/n.raid)
 
 boxplot(stage.summary$pct.stage ~ stage.summary$tactic.season,
-        main = 'distribution of % staging by individuals in the 4 tactics',
+        main = 'distribution of staging frequency by individuals in the 4 tactics',
         xlab = 'Tactics (Rare to Habitual)', ylab = 'Pct. of Raids with a Stage')
 
 #' ##### Plot the data on a map
@@ -207,7 +209,7 @@ ggplot(data = gme) + geom_sf() + coord_sf(datum=st_crs(32736)) +
 
 #' Table of staging events and ag bouts for each individual-year
 stage.summary <- gme.stage %>%
-  group_by(subject_name, tactic.season) %>%
+  group_by(subject_name, tactic.season, year.cuts) %>%
   summarise(n.stage = length(unique(stage.event.index)),
             n.raid = length(unique(ag.window.index)),
             pct.stage = n.stage/n.raid)
