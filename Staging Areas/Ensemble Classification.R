@@ -118,16 +118,15 @@ for (i in 1:dim(plot.df)[1]) { # voting by row of plot.df -- row corresponds wit
     mutate(pct = round((enc.day/win.size), 3))
   
   # tag all staging events
-  stage.event <- ifelse(t$pct > pct.threshold & t$stage.period == 1 & t$dw.day == 0, 1, 0)
+  stage.event <- ifelse(t$pct >= pct.threshold & t$stage.period == 1 & t$dw.day == 0, 1, 0)
   # tag ag staging events
-  ag.stage.event <- ifelse(t$pct > pct.threshold & t$stage.period == 1 & t$dw.day == 0 & t$ag.window.ext == 1, 1, 0)
+  ag.stage.event <- ifelse(t$pct >= pct.threshold & t$stage.period == 1 & t$dw.day == 0 & t$ag.window.ext == 1, 1, 0)
   
   ## index staging events
   # eventFlag[[i]] <- ifelse(ag.stage.event == 1, TRUE, FALSE)
   # eventIndex[[i]] <- inverse.rle(within.list(rle(eventFlag[[i]]),
   #                                            values[values] <- seq_along(values[values])))
   eventWeight[[i]] <- ifelse(ag.stage.event == 1, 1*(plot.df$n.stage.acc[i]), 0)
-  eventWeight.all[[i]] <- ifelse(stage.event == 1, 1*(plot.df$n.stage.acc[i]), 0)
   }
 
 #' The resulting dataframe has a column for each model (418) and each row corresponds
@@ -197,6 +196,7 @@ stage.summary <- gme.stage %>%
 boxplot(stage.summary$pct.stage ~ stage.summary$tactic.season,
         main = 'distribution of staging frequency by individuals in the 4 tactics',
         xlab = 'Tactics (Rare to Habitual)', ylab = 'Pct. of Raids with a Stage')
+
 
 #' ##### Plot the data on a map
 
