@@ -102,6 +102,7 @@ plot.df$n.stage.acc <- 1-plot.df$n.stage.err # accuracy = 1-error
 eventFlag <- NULL # TRUE/FALSE whether a relocation is part of a stage
 eventIndex <- NULL # Unique ID for stage event
 eventWeight <- NULL # Accuracy of the specific model, to be used for weighting
+eventWeight.all <- NULL
 
 # create new dataframe
 gme.stage <- gme
@@ -122,11 +123,12 @@ for (i in 1:dim(plot.df)[1]) { # voting by row of plot.df -- row corresponds wit
   ag.stage.event <- ifelse(t$pct > pct.threshold & t$stage.period == 1 & t$dw.day == 0 & t$ag.window.ext == 1, 1, 0)
   
   ## index staging events
-  eventFlag[[i]] <- ifelse(ag.stage.event == 1, TRUE, FALSE)
-  eventIndex[[i]] <- inverse.rle(within.list(rle(eventFlag[[i]]),
-                                             values[values] <- seq_along(values[values])))
+  # eventFlag[[i]] <- ifelse(ag.stage.event == 1, TRUE, FALSE)
+  # eventIndex[[i]] <- inverse.rle(within.list(rle(eventFlag[[i]]),
+  #                                            values[values] <- seq_along(values[values])))
   eventWeight[[i]] <- ifelse(ag.stage.event == 1, 1*(plot.df$n.stage.acc[i]), 0)
-}
+  eventWeight.all[[i]] <- ifelse(stage.event == 1, 1*(plot.df$n.stage.acc[i]), 0)
+  }
 
 #' The resulting dataframe has a column for each model (418) and each row corresponds
 #' to a GPS relocation. If a stage is detected for a given model, the vote value 
@@ -187,7 +189,7 @@ summary(stage.summary$pct.stage)
 
 # summarise % staging distribution by individual-year tactic
 stage.summary <- gme.stage %>%
-  group_by(subject_name, tactic.season) %>%
+  group_by(subject_name, tactic.season, year.cuts) %>%
   summarise(n.stage = length(unique(stage.event.index)),
             n.raid = length(unique(ag.window.index)),
             pct.stage = n.stage/n.raid)
