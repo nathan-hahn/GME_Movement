@@ -13,6 +13,10 @@ library(doParallel)
 #' Step 3: Filter spatial data rasters by staging relocations (buffer)
 #' Step 4: Apply landscape metrics to filtered spatial data
 
+
+# set wd - for ssh
+setwd('~Dropbox/CSU/GME_Movement')
+
 # Import spatial data
 # Forest cover - hansen
 forest <- raster('./spatial data/Forest_hansen/hansen_cover60_reclass_2019_2.tif')
