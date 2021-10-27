@@ -2,6 +2,7 @@
 
 library(raster)
 library(tidyverse)
+#remotes::install_github("r-spatialecology/landscapemetrics")
 library(landscapemetrics)
 library(sf)
 library(doParallel)
@@ -15,23 +16,7 @@ library(doParallel)
 
 
 # set wd - for ssh
-setwd('~Dropbox/CSU/GME_Movement')
-
-# Import spatial data
-# Forest cover - hansen
-forest <- raster('./spatial data/Forest_hansen/hansen_cover60_reclass_2019_2.tif')
-m <- c(NA, 0, 1, 1)
-rclmat <- matrix(m, ncol=2, byrow=TRUE)
-forest <- reclassify(forest, rcl = rclmat)
-
-# Estes landcover
-gse <- raster('./spatial data/change03_181_reclassMara_2019-11-22.tif')
-
-# Reclassify to Natural-Ag cover
-# 0 = nodata, 1 = ag, 2 = natural cover
-m <- c(0, 0, 1, 1, 2, 2, 3, 2, 4, 0)
-rclmat <- matrix(m, ncol=2, byrow=TRUE)
-gse <- reclassify(gse, rcl = rclmat)
+setwd('~/Dropbox/CSU/GME_Movement')
 
 # Import staging area relocations
 df <- as.data.frame(data.table::fread('./Staging Areas/movdata/GMEcollars_004_stageclassified_20211019'))
@@ -45,6 +30,8 @@ step <- df %>%
   summarise(mean.step = mean(dist))
 step
 
+step <- 312
+
 # mean daily distance moved (by ag phase) - 5201m
 ddm <- df %>%
   group_by(ag.window, dayBurst) %>%
@@ -53,7 +40,9 @@ ddm <- df %>%
   summarise(m.ddm = mean(ddm))
 ddm
 
-##### 3: Calculate Metrics in Buffers #####
+ddm <- 5201
+
+##### 3: Generate buffers #####
 
 # filter to relocs of interest
 #df <- df[df$vote == 1,] 
@@ -64,32 +53,61 @@ ddm
 #points(sample.df$x, sample.df$y)
 
 # create spatial df
-sf <- st_as_sf(sample.df, coords = c('x','y'), crs = 32736)
+sf <- st_as_sf(df, coords = c('x','y'), crs = 32736)
 
-##### Extract in Parallel #####
-# spin up cluster
-cl <- makeCluster(7)
-registerDoParallel(cl)
+# create buffers
+sf.ddm <- st_buffer(sf, dist = ddm)
 
 # split dataframe into equal chunks
-d <- (dim(df)[1])/7
-split <- split(sf, (seq(nrow(sf))-1) %/% d)
+#d <- (dim(sf.ddm)[1])/10
+split <- split(sf.ddm, (seq(nrow(sf.ddm))-1) %/% 10000)
+
+# save as rds file
+saveRDS(split, './Staging Areas/movdata/ddm_buffer.RDS')
+
+# clear environment to free memory - if using Rstudio, also need to restart r session
+rm(list = ls())
+
+##### Re-import data #####
+
+# add split
+split <- readRDS('./Staging Areas/movdata/ddm_buffer.RDS')
+
+# add ev data
+# Estes landcover
+gse <- raster('./spatial data/change03_181_reclassMara_2019-11-22.tif')
+
+# Reclassify to Natural-Ag cover
+# 0 = nodata, 1 = ag, 2 = natural cover
+m <- c(0, 0, 1, 1, 2, 2, 3, 2, 4, 0)
+rclmat <- matrix(m, ncol=2, byrow=TRUE)
+gse <- reclassify(gse, rcl = rclmat)
+
+
+##### Extract in Parallel #####
+
+# spin up cluster
+cores <- 2
+cl <- makeCluster(cores, output="") #output should make it spit errors
+registerDoParallel(cl)
 
 # # step-buffer metrics
-# step.gse <- foreach(i=1:length(split), .combine=rbind) %do% {
+# step.metrics <- foreach(i=1:length(split), .combine=rbind) %do% {
 #   step.metrics <- sample_lsm(gse, y = split.200[[i]], size = 312, shape = 'square',
 #                              what = c('lsm_c_ed','lsm_p_para','lsm_l_contag'))
 # }
-# 
-# step.gse
+
+# write.csv(step.metrics, './Staging Areas/step_metrics_20211020')
 
 # ddm-buffer metrics
 system.time({
-ddm.metrics <- foreach(i=1:length(split), .combine=rbind) %do% {
-  metrics <- sample_lsm(gse, y = split[[i]], size = 5201, shape = 'square',
-                             what = c('lsm_c_ed','lsm_p_para','lsm_l_contag', 'lsm_l_lsi'))
+ddm.metrics <- foreach(i=1:length(split)) %dopar% {
+  metrics <- landscapemetrics::sample_lsm(gse, y = split[[i]], size = 5201, shape = 'square',
+                             what = c('lsm_c_ed', 'lsm_c_pland', 'lsm_p_para', 'lsm_l_contag', 'lsm_l_lsi'))
 }
 })
+
+stopCluster(cl)
 
 write.csv(ddm.metrics, './Staging Areas/dd_metrics_20211020')
 
