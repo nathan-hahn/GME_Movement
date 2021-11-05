@@ -186,10 +186,12 @@ start_time <- Sys.time()
 dataoutput <- data.frame()
 for(x in unique(tsf$uniq)){
   data1 <- tsf %>% filter(uniq == x)
-  temp <- ee_extract(x = gHM, y = data1, sf = FALSE, scale = 1000)
-  # Append
-  dataoutput <- rbind(dataoutput, temp)
+  data.gHM <- ee_extract(x = gHM, y = data1, sf = FALSE, scale = 1000)
+  data.slope <- ee_extract(x = slope, y = data1, sf = FALSE, scale = 30)
+  # Append - gHM used to index uid, slope variable appended on
+  dataoutput <- rbind(dataoutput, data.gHM, data.slope$slope)
 }  
-  
+end_time <- Sys.time()
+end_time - start_time
 
 
