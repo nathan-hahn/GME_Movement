@@ -124,8 +124,12 @@ tmax
 start<-"2011-08-01"
 end<-"2021-04-01"
 
+# Select MODIS imagery 
+# NOTE: The MODIS NDVI and EVI products are computed from atmospherically 
+#       corrected bi-directional surface reflectances that have been masked 
+#       for water, clouds, heavy aerosols, and cloud shadows.
 imagecoll<-ee$ImageCollection('MODIS/006/MOD13Q1')$filterDate(start,end)
-band <- "NDVI" #Name of the band to use. You can change to EVI for instance when using MOD13Q1.
+band <- "NDVI" #Name of the band to use. Also can select EVI from this product
 
 ##### Extract NDVI Values #####
 #datasf <- datasf[1:100000,]
@@ -164,30 +168,28 @@ dataoutput
 # make a slope image -- using SRTM 
 drm <- ee$Image("USGS/SRTMGL1_003")
 slope <- ee$Terrain$slope(drm)
-
 # check
-visualization_params <- list(min=0, max=45, palette='white,black')
-Map$addLayer(slope, visualization_params)
+vis_params <- list(min=0, max=45, palette='white,black')
+Map$addLayer(slope, vis_params)
 
+# make a human modification image -- using gHM layer
+gHM <- ee$ImageCollection("CSP/HM/GlobalHumanModification")
+gHM <- ee$Image(gHM$first())
+#check
+vis_params <- list(min=0, max=1, palette='white,black')
+Map$addLayer(gHM, vis_params)
 
+tsf <- datasf[1:10000,]
+tsf$uniq <- rep(1:1000, each=1000)[1:nrow(tsf)] #This is for up to 1 million points. To increase the max number of points, increase the value for max repetitions. To change the number of points to run per time, change the value in the argument each.
 
 start_time <- Sys.time()
 dataoutput <- data.frame()
-for(x in unique(datasf$uniq)){
-  data1 <- datasf %>% filter(uniq == x)
-  # Send sf to GEE
-  data <- sf_as_ee(data1)
-  # Transform day into milliseconds
-  data<-data$map(add_date)
-  # Apply the join
-  Data_match<-saveBestJoin$apply(data, imagecoll, maxDiffFilter)
-  # Add pixel value to the data
-  DataFinal<-Data_match$map(add_value)
-  # Remove image property from the data
-  DataFinal<-DataFinal$map(removeProperty)
-  # Move GEE object into R
-  temp<- ee_as_sf(DataFinal, via = 'getInfo')
+for(x in unique(tsf$uniq)){
+  data1 <- tsf %>% filter(uniq == x)
+  temp <- ee_extract(x = gHM, y = data1, sf = FALSE, scale = 1000)
   # Append
   dataoutput <- rbind(dataoutput, temp)
-}
-end_time <- Sys.time()
+}  
+  
+
+
