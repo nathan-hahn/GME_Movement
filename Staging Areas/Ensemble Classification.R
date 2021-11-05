@@ -219,6 +219,6 @@ stage.summary <- gme.stage %>%
 
 
 #### Save Staging-Tagged Data ####
-write.csv(gme.stage,'./Staging Areas/movdata/GMEcollars_004_stageclassified_20211019')
+write.csv(gme.stage,'./Staging Areas/movdata/GMEcollars_004_stageclassified_20211019.csv')
 
 
