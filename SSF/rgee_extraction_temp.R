@@ -229,6 +229,12 @@ for(x in unique(tsf$uniq)){
 end_time <- Sys.time()
 end_time - start_time
 
+dataoutput
+
+# update band name for NDVI -- check indexing first!!!
+names(dataoutput)[3] <- band
+dataoutput
+
 
 
 
