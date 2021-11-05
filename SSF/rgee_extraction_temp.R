@@ -166,18 +166,18 @@ dataoutput
 #### Extract Multiple Covariates ####
 
 # make a slope image -- using SRTM 
-drm <- ee$Image("USGS/SRTMGL1_003")
-slope <- ee$Terrain$slope(drm)
+ee.drm <- ee$Image("USGS/SRTMGL1_003")
+ee.slope <- ee$Terrain$slope(drm)
 # check
 vis_params <- list(min=0, max=45, palette='white,black')
-Map$addLayer(slope, vis_params)
+Map$addLayer(ee.slope, vis_params)
 
 # make a human modification image -- using gHM layer
-gHM <- ee$ImageCollection("CSP/HM/GlobalHumanModification")
-gHM <- ee$Image(gHM$first())
+ee.gHM <- ee$ImageCollection("CSP/HM/GlobalHumanModification")
+ee.gHM <- ee$Image(ee.gHM$first())
 #check
 vis_params <- list(min=0, max=1, palette='white,black')
-Map$addLayer(gHM, vis_params)
+Map$addLayer(ee.gHM, vis_params)
 
 tsf <- datasf[1:10000,]
 tsf$uniq <- rep(1:1000, each=1000)[1:nrow(tsf)] #This is for up to 1 million points. To increase the max number of points, increase the value for max repetitions. To change the number of points to run per time, change the value in the argument each.
@@ -186,13 +186,51 @@ start_time <- Sys.time()
 dataoutput <- data.frame()
 for(x in unique(tsf$uniq)){
   data1 <- tsf %>% filter(uniq == x)
-  data.gHM <- ee_extract(x = gHM, y = data1, sf = FALSE, scale = 1000)
-  data.slope <- ee_extract(x = slope, y = data1, sf = FALSE, scale = 30)
+  data.gHM <- ee_extract(x = ee.gHM, y = data1, sf = FALSE, scale = 1000)
+  data.slope <- ee_extract(x = ee.slope, y = data1, sf = FALSE, scale = 30)
   # Append - gHM used to index uid, slope variable appended on
   temp <- inner_join(data.gHM, data.slope, by = c('uid', 'id', 'Date','uniq'), keep = F)
   dataoutput <- rbind(dataoutput, temp)
 }  
 end_time <- Sys.time()
 end_time - start_time
+
+
+#### Test combination of NDVI and static data ####
+
+start_time <- Sys.time()
+dataoutput <- data.frame()
+for(x in unique(tsf$uniq)){
+  chunk <- tsf %>% filter(uniq == x)
+  
+  ## Perform static extraction
+  data.gHM <- ee_extract(x = ee.gHM, y = data1, sf = TRUE, scale = 1000)
+  data.slope <- ee_extract(x = ee.slope, y = data1, sf = TRUE, scale = 30)
+  # Append back to chunk - gHM used to index uid, slope variable appended on
+  slope <- data.slope$slope
+  chunk <- cbind(data.gHM, slope)
+  
+  ## Perform temporal extraction
+  # Send sf to GEE
+  data <- sf_as_ee(chunk)
+  # Transform day into milliseconds
+  data <- data$map(add_date)
+  # Apply the join
+  Data_match <- saveBestJoin$apply(data, imagecoll, maxDiffFilter)
+  # Add pixel value to the data
+  DataFinal <- Data_match$map(add_value)
+  # Remove image property from the data
+  DataFinal <- DataFinal$map(removeProperty)
+  # Move GEE object into R
+  temp <- ee_as_sf(DataFinal, via = 'getInfo')
+  # Append
+  dataoutput <- rbind(dataoutput, temp)
+}
+end_time <- Sys.time()
+end_time - start_time
+
+
+
+
 
 
