@@ -95,8 +95,6 @@ ras250<-raster(xmn=floor(tt1[1]), ymn=floor(tt1[2]),xmx=ceiling(tt2[1]), ymx=cei
 
 # create adjacency matrix
 adj_patches2<-traj2adj(traj, res=250, grid=ras250) #Grid size based on median
-plot(adj_patches2[[2]]) #Crop version of the grid created
-plot(adj_patches2[[3]]) #Plot occupied pixels 
 
 #' #E- Looping over all individuals *loop*
 #' The function *loop* is a wrapper of *traj2adj* and *adj2stack* applied to all individuals 
