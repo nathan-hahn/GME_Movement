@@ -165,19 +165,25 @@ dataoutput
 
 #### Extract Multiple Covariates ####
 
-# make a slope image -- using SRTM 
+## make a slope image -- using SRTM 
 ee.drm <- ee$Image("USGS/SRTMGL1_003")
 ee.slope <- ee$Terrain$slope(drm)
 # check
 vis_params <- list(min=0, max=45, palette='white,black')
 Map$addLayer(ee.slope, vis_params)
 
-# make a human modification image -- using gHM layer
+## make a human modification image -- using gHM layer
 ee.gHM <- ee$ImageCollection("CSP/HM/GlobalHumanModification")
 ee.gHM <- ee$Image(ee.gHM$first())
 #check
 vis_params <- list(min=0, max=1, palette='white,black')
 Map$addLayer(ee.gHM, vis_params)
+
+## add forest layer from assets  
+ee.forest <- ee$Image('users/nhahnwa/slope_Estes-2019-11-21')
+vis_params <- list(min=0, max=45, palette='white,black')
+Map$addLayer(ee.forest, vis_params)
+
 
 tsf <- datasf[1:10000,]
 tsf$uniq <- rep(1:1000, each=1000)[1:nrow(tsf)] #This is for up to 1 million points. To increase the max number of points, increase the value for max repetitions. To change the number of points to run per time, change the value in the argument each.
