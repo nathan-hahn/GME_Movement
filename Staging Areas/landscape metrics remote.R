@@ -39,7 +39,7 @@ cores <- 6
 cl <- makeCluster(cores, output="") #output should make it spit errors
 registerDoParallel(cl)
 
-split <- split[1:30]
+split <- split[91:119]
 
 
 # ddm-buffer metrics - 5 hours for list of 30
@@ -55,5 +55,5 @@ ddm.metrics <- foreach::foreach(i=1:l) %dopar% {
 stopCluster(cl)
 
 t <- data.table::rbindlist(ddm.metrics)
-write.csv(t, './Staging Areas/movdata/ddm_metrics_r1.csv')
+write.csv(t, './Staging Areas/movdata/ddm_metrics_r4.csv')
 
