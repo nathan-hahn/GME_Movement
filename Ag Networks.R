@@ -140,17 +140,18 @@ plot(mean_degree, main = 'mean degree')
 max_between<-mosaic_network(out1, index=5, sc=T, fun=max) #Perform max weight (not-interpolated)
 plot(max_between, main = 'max betweeness')
 
+max_loop <- mosaic_network(out1, index=3, sc=T, fun=max)
+
 # for any of the rasters, use this code to plot in mapview for closer inspection
-r.plot <- max_between
-crs(r.plot) <- '+init=epsg:32736' #EPSG code for UTM Zone 37N (https://epsg.io/32637)
-crs(tt) <- '+init=epsg:32736'
+r.plot <- max_loop
+crs(r.plot) <- '+init=epsg:32736' 
 
 mapview(r.plot, col.regions = RColorBrewer::brewer.pal(9, "YlOrRd"))
 
 
 ## Add staging areas on top
-stage.sp <- SpatialPoints(df[df$vote == 1,][,6:7])
-crs(stage.sp) <- '+init=epsg:32736'
+stage.sp <- sf::st_as_sf(elephants, coords = c('x', 'y'), crs = 32736)
+#crs(stage.sp) <- '+init=epsg:32736'
 
 mapview(r.plot, col.regions = RColorBrewer::brewer.pal(9, "YlOrRd")) + mapview(stage.sp)
 
@@ -171,7 +172,7 @@ mapview(r.plot, col.regions = RColorBrewer::brewer.pal(9, "YlOrRd")) + mapview(s
 out2<-interpolation(traj4, out1)
 
 # As a shortcut, I provided the interpolated data. Read in RData file with the interpolation
-#out2 <- readRDS('ag.window.interpolation.RDS')
+out2 <- readRDS('ag_network_interpolation.RDS')
 
 mean_mean_degree <- mosaic_network(out2, index=2, sc=T, fun=mean)
 max_max_between <- mosaic_network(out2, index=3, sc=T, fun=max)
@@ -187,8 +188,10 @@ plot(mean_dot_TA, "Directionality", main = "Directionality")
 # plot interactive connectivity map
 r.plot <- max_max_between
 crs(r.plot) <- '+init=epsg:32736' 
-crs(tt) <- '+init=epsg:32736'
-mapview(r.plot)
+stage.sp <- sf::st_as_sf(elephants, coords = c('x', 'y'), crs = 32736)
+
+mapview(r.plot, col.regions = RColorBrewer::brewer.pal(9, "YlOrRd")) #+ mapview(stage.sp, cex = 1.5, col.region = black) ## Add staging areas on top
+  
 
 #' These four layers are showing interpolated and mosaicked population-level network or 
 #' movement properties. Again, these raster could be exported to be opened in ArcGIS using 
@@ -199,6 +202,40 @@ mapview(r.plot)
 #' interpolated raster with the GPS movement data.
 
 
+library(sf)
+library(ggplot2)
+gme <- sf::st_read('~/Dropbox (Personal)/CSU/GME_Movement/spatial data/GSE/GSE_2020.shp') 
+stage.relocs <- filter(df, vote == 1) %>%
+  st_as_sf(coords = c('x','y'), crs = 32736)
+ag.relocs <- elephants %>% 
+  filter(vote == 0) %>%
+  st_as_sf(coords = c('x','y'), crs = 32736) 
 
+mapview::mapview(gme, col.region = , alpha = 0.2) + mapview::mapview(stage.relocs, cex = 1.5, col.region = 'red') 
+
+library(tmap)
+
+# define network metric to plot - betweeness - and give it a projection system
+r.plot <- max_max_between
+crs(r.plot) <- '+init=epsg:32736' 
+
+stage.points <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'protected areas') +
+  tm_shape(ag.relocs) + tm_dots(size = 0.01, alpha = 0.03, col = '#FEE0D2') + 
+  tm_shape(stage.relocs) + tm_dots(size = 0.01, alpha = 0.02, col = '#DE2D26', title = 'staging relocs') + 
+  # add manual legend for tm_dot layers
+  tm_add_legend(title = 'staging relocs', type = 'symbol', labels = c('ag day relocs', 'staging relocs'), col = c('#FEE0D2', '#DE2D26')) +
+  # add map title
+  tm_layout(title = 'Staging Relocations')
+stage.points
+
+
+ag.betweeness <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'serengeti-mara') +
+  tm_shape(r.plot, raster.downsample = FALSE) + tm_raster(palette = RColorBrewer::brewer.pal(9, 'YlOrRd'), title = 'max_max_betweeness') + 
+  tm_scale_bar() + tm_layout(title = 'Network Betweeness')
+ag.betweeness
+
+t <- tmap_arrange(stage.points, ag.betweeness)
+tmap_save(t, "Staging Panel.png", dpi = 300)
+tmap_save(stage.points, "Staging Relocs Map.png", dpi = 300)
 
 
