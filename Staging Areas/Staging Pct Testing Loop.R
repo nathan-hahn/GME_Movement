@@ -69,7 +69,7 @@ levels(t.pct$ag.window) <- c('non-window', 'ag-window')
 ggplot(t.pct, aes(as.factor(hour), mean.pct)) + geom_pointrange(
   aes(ymin = lwr.ci, ymax = upr.ci, color = ag.window), 
   position = position_dodge(0.5), size = .2) + 
-  ggtitle("Encamped/Meandering Ratio by Hour and Ag Window")
+  ggtitle("Encamped Pct by Hour and Ag Window")
 
 
 #### Stage Loops ####
