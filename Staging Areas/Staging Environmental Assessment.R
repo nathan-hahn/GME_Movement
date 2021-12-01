@@ -7,6 +7,9 @@ library(MuMIn)
 library(mapview)
 library(tmap)
 
+###########################################################################################################
+## ///////////////////////////////////////////// Data Prep ///////////////////////////////////////////// ##
+###########################################################################################################
 
 #### Load Data ####
 df <- as.data.frame(data.table::fread('./movdata/GMEcollars_004_stageclassified_20211019.csv'))
@@ -43,8 +46,8 @@ dist2forest <- rast("./spatial data/dist2forest_hansen_cover60_32736_30.tif")
 slope <- rast("./spatial data/slope_estes_32736_2020-05-12.tif")
 lc <- rast("./spatial data/change03_181_reclassMara_2019-11-22.tif")
 gHM <- rast("./spatial data/gHM_estes_32736_2020-05-12.tif")
-pct.settlement.250 <- rast("./spatial data/estes_settlement_pct_250.tif")
-prop.settlement.1500 <- rast("./spatialdata/estes_settlement_pct_1500.tif")
+pct.settlement.250 <- rast("spatial data/estes_settlement_pct_250.tif")
+prop.settlement.1500 <- rast("spatial data/estes_settlement_pct_1500.tif")
 dist2paedge <- rast("./spatial data/dist2paedge_estes_32736_20211118.tif")
 
 pa <- rast("./spatial data/GSEr_dissolved_estes_32736_20211118.tif") # binary protection status dissolved (0/1)
@@ -129,50 +132,47 @@ summary(used.df$dist2paedge)
 #write.csv(used.df, './Staging Areas/movdata/movdat_004_lsdv.csv')
 
 
+###########################################################################################################
+## ///////////////////////////////////////// Model Fitting ///////////////////////////////////////////// ##
+###########################################################################################################
 
-#### Prep Model Fitting ####
+#### Model Fitting ####
+
+##### Read in data #####
 used.df <- as.data.frame(data.table::fread('./Staging Areas/movdata/movdat_004_lsdv.csv'))
 used.df$V1 <- NULL
 
-# standardize covs
+## standardize covs
 covariates <- c("dist2ag", "dist2agedge", "dist2water", 'slope', 'dist2forest', 'dist2paedge')
 ds.st <- used.df %>%
   dplyr::select(subject_name, burst, x, y, date, vote, all_of(covariates), drains1000, gHM, prop.ag.250, prop.ag.1500,
                 prop.forest.250, prop.forest.1500) %>%
   mutate_at(covariates, .funs = scale) %>%
   mutate(drains1000 = as.factor(drains1000)) %>%
-  # select only pertinent values
-
   droplevels()
 
-
-# must be a dataframe to work!! 
-ds.st <- as.data.frame(ds.st)
-
-# fit basic logistic regression
-library(lme4)
-library(MuMIn)
-
-##### test pct scales #####
-mod.ag <- glmer(vote ~ prop.ag.250 + (1|subject_name),
-                data = ds.st, family = binomial)
-mod.ag.daily <- glmer(vote ~ prop.ag.1500 + (1|subject_name),
-                      data = ds.st, family = binomial)
-AICc(mod.ag, mod.ag.daily) # ag step is better scale by AIC
-
-mod.for <- glmer(vote ~ prop.forest.250 + (1|subject_name),
-                 data = ds.st, family = binomial)
-mod.for.daily <- glmer(vote ~ prop.forest.1500 + (1|subject_name),
-                       data = ds.st, family = binomial)
-mod.for.dist <- glmer(vote ~ dist2forest + (1|subject_name),
-                      data = ds.st, family = binomial)
-AICc(mod.for, mod.for.daily, mod.for.dist) # forest step scale is better by AIC
-
-##### Model Fitting Using Only Daytime Relocs #####
-
+## **remove relocations within ag**
 ds.st.sub <- ds.st %>%
   #filter(lubridate::hour(date) %in% c(6:18)) %>%
   filter(dist2ag > 0)
+
+
+##### test spatial scales for moving window metrics #####
+mod.ag.step <- glmer(vote ~ prop.ag.250 + (1|subject_name),
+                data = ds.st.sub, family = binomial)
+mod.ag.daily <- glmer(vote ~ prop.ag.1500 + (1|subject_name),
+                      data = ds.st.sub, family = binomial)
+AICc(mod.ag.step, mod.ag.daily) # ag daily scale is better by AICc, ag step model is rank deficient and ag drops from model
+
+mod.for.step <- glmer(vote ~ prop.forest.250 + (1|subject_name),
+                 data = ds.st.sub, family = binomial)
+mod.for.daily <- glmer(vote ~ prop.forest.1500 + (1|subject_name),
+                       data = ds.st.sub, family = binomial)
+mod.for.dist <- glmer(vote ~ dist2forest + (1|subject_name),
+                      data = ds.st.sub, family = binomial)
+AICc(mod.for.step, mod.for.daily, mod.for.dist) # forest step scale is better by AICc
+
+##### Fit candidate models #####
 
 ## Global model
 mod.global.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + (1|subject_name), 
@@ -188,7 +188,7 @@ mod.nat.sub <- glmer(vote ~ prop.forest.250 + drains1000 + slope + (1|subject_na
 
 
 summary(mod.global.sub)
-sjPlot::plot_models(mod.global, mod.global.sub)
+sjPlot::plot_models(mod.global.sub)
 
 
 # test for spatial autocorrelation with moran's I test 
@@ -201,10 +201,9 @@ mod.global.sub.xy <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + 
                         data = ds.st.sub, family = binomial)
 
 
-summary(mod.global.sub.xy)
-summary(mod.global.sub)
+sjPlot::plot_models(mod.global.sub, mod.global.sub.xy)
 
-#### Grid-Based Model ####
+#### Grid-Based Model Fitting ####
 
 ##### Create Grid #####
 ## create grid -- 250m with extent based on gHM Estes (1000m res)
@@ -233,8 +232,20 @@ prop.dens <- function(x,y){
   return(prop.dens)
 }
 
-stack.calc <- raster::overlay(stack, fun = prop.dens)
-stack.calc <- rast(stack.calc) # keep everything in terra
+rel.staging.occ <- raster::overlay(stack, fun = prop.dens)
+rel.staging.occ <- rast(rel.staging.occ) # keep everything in terra
+plot(rel.staging.occ)
+
+
+weights <- function(x,y){
+  x = ifelse(is.na(x) & !is.na(y), 0, x) # replace NAs for staging raster with 0 if y has a value
+  sum = x + y
+  return(sum)
+}
+
+occ.weights <- raster::overlay(stack, fun = weights)
+occ.weights <- rast(occ.weights)
+plot(occ.weights)
 
 # check results
 YlOrRd <- RColorBrewer::brewer.pal(9, 'YlOrRd')
@@ -273,24 +284,31 @@ locs <- locs.sf %>% terra::vect()
 
 # extract to new column
 rel.staging.occ <- terra::rast('./Staging Areas/staging_reldensity_1000m.tif')
+#occ.weights <- terra::rast('...')
 ds.st.sub$rel.staging.occ <- terra::extract(rel.staging.occ, locs)[,2]
+ds.st.sub$occ.weights <- terra::extract(occ.weights, locs)[,2]
 ds.st.sub <- ds.st.sub[!is.na(ds.st.sub$rel.staging.occ),]
 summary(ds.st.sub$rel.staging.occ)
+summary(ds.st.sub$occ.weights)
+
 
 hist(ds.st.sub$rel.staging.occ)
 
 ##### Fit Regression Model #####
 
-mod.global.sub.1000 <- lmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + (1|subject_name), 
-                            data = ds.st.sub, REML = FALSE)
+mod.global.sub.1000 <- glmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + scale(x) + scale(y) + (1|subject_name), 
+                            weights = scale(occ.weights), # weights supplied as total counts that proportions arise from
+                            data = ds.st.sub,
+                            family = binomial)
 summary(mod.global.sub.1000)
 
 mod.global.sub.1000.xy <- lmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + scale(x) + scale(y) + (1|subject_name), 
                                data = ds.st.sub, REML = FALSE)
 summary(mod.global.sub.1000.xy)
 
-mod.global.sub.250 <- lmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + (1|subject_name), 
-                           data = ds.st.sub, REML = FALSE)
-summary(mod.global.sub.250)
+sjPlot::plot_models(mod.global.sub.1000, mod.global.sub.1000.xy)
+
+plot(mod.global.sub.1000)
+plot(mod.global.sub.1000.xy)
 
 
