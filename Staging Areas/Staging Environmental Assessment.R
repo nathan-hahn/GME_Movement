@@ -145,7 +145,7 @@ used.df$V1 <- NULL
 covariates <- c("dist2ag", "dist2agedge", "dist2water", 'slope', 'dist2forest', 'dist2paedge')
 ds.st <- used.df %>%
   dplyr::select(subject_name, burst, x, y, date, vote, all_of(covariates), drains1000, gHM, prop.ag.250, prop.ag.1500,
-                prop.forest.250, prop.forest.1500) %>%
+                prop.forest.250, prop.forest.1500, prop.settlement.250, prop.settlement.1500) %>%
   mutate_at(covariates, .funs = scale) %>%
   mutate(drains1000 = as.factor(drains1000)) %>%
   droplevels()
@@ -176,6 +176,9 @@ AICc(mod.for.step, mod.for.daily, mod.for.dist) # forest step scale is better by
 ## Global model
 mod.global.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + (1|subject_name), 
                     data = ds.st.sub, family = binomial)
+
+mod.global.2 <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + prop.settlement.1500 + dist2paedge + (1|subject_name), 
+                        data = ds.st.sub, family = binomial)
 
 ## Human footprint model
 mod.hm.sub <- glmer(vote ~ prop.ag.250 + gHM + dist2paedge + (1|subject_name),
