@@ -46,7 +46,7 @@ dist2forest <- rast("./spatial data/dist2forest_hansen_cover60_32736_30.tif")
 slope <- rast("./spatial data/slope_estes_32736_2020-05-12.tif")
 lc <- rast("./spatial data/change03_181_reclassMara_2019-11-22.tif")
 gHM <- rast("./spatial data/gHM_estes_32736_2020-05-12.tif")
-pct.settlement.250 <- rast("spatial data/estes_settlement_pct_250.tif")
+prop.settlement.250 <- rast("spatial data/estes_settlement_pct_250.tif")
 prop.settlement.1500 <- rast("spatial data/estes_settlement_pct_1500.tif")
 dist2paedge <- rast("./spatial data/dist2paedge_estes_32736_20211118.tif")
 
@@ -95,7 +95,6 @@ used[,14] <- extract(prop.forest.1500, locs)[,2]
 used[,15] <- extract(dist2paedge, locs)[,2]
 used[,16] <- extract(prop.settlement.250, locs)[,2]
 used[,17] <- extract(prop.settlement.1500, locs)[,2]
-used[,18] <- extract(settlement.1000, locs)[,2]
 })
 
 
@@ -108,7 +107,7 @@ mode(used) = "numeric"
 used2 <- as.data.frame(used)
 used2$uid <- as.character(locs.sf$uid)
 colnames(used2) <- c("used","dist2ag", "dist2agedge", "dist2water", 'drains1000', 'slope', 'gHM', 'pa', 'lc', 'dist2forest', 
-                     'prop.ag.250', 'prop.ag.1500', 'prop.forest.250', 'prop.forest.1500', 'dist2paedge', 'merge_id')
+                     'prop.ag.250', 'prop.ag.1500', 'prop.forest.250', 'prop.forest.1500', 'dist2paedge', 'prop.settlement.250', 'prop.settlement.1500', 'merge_id')
 head(used2)
 
 # unstandardized data frame
