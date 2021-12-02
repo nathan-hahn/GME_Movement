@@ -142,7 +142,7 @@ datasf <- st_as_sf(trackingdata, coords = c("location.long", "location.lat"), cr
 #           This code will make 1000 batches of 1000 rows each. 
 datasf$uniq <- rep(1:1000, each=1000)[1:nrow(datasf)] #This is for up to 1 million points. To increase the max number of points, increase the value for max repetitions. To change the number of points to run per time, change the value in the argument each.
 
-# Start the NDVI extraction and time it (~3 minutes)
+# Start the NDVI extraction and time it 
 start_time <- Sys.time()
 dataoutput <- data.frame()
 for(x in unique(datasf$uniq)){
@@ -164,7 +164,7 @@ for(x in unique(datasf$uniq)){
 }
 end_time <- Sys.time()
 
-# time needed to run 100000 points
+# time needed to run 100000 points -- 15 minutes
 end_time - start_time
 
 # update band name
@@ -201,11 +201,11 @@ Map$addLayer(ee.forest.250, vis_params)
 # Again, we split the data into 1000 chunks of 1000 rows. 
 datasf$uniq <- rep(1:1000, each=1000)[1:nrow(datasf)] #This is for up to 1 million points. To increase the max number of points, increase the value for max repetitions. To change the number of points to run per time, change the value in the argument each.
 
-# Start the extraction and time it --xx minutes
+# Start the extraction and time it 
 start_time <- Sys.time()
 dataoutput <- data.frame()
-for(x in unique(tsf$uniq)){
-  data1 <- tsf %>% filter(uniq == x)
+for(x in unique(datasf$uniq)){
+  data1 <- datasf %>% filter(uniq == x)
   data.gHM <- ee_extract(x = ee.gHM, y = data1, sf = FALSE, scale = 1000)
   data.slope <- ee_extract(x = ee.slope, y = data1, sf = FALSE, scale = 30)
   # Append - gHM used to index uid, slope variable appended on
@@ -213,6 +213,8 @@ for(x in unique(tsf$uniq)){
   dataoutput <- rbind(dataoutput, temp)
 }
 end_time <- Sys.time()
+
+# time for 100000 points -- 12 minutes
 end_time - start_time
 
 
@@ -224,10 +226,12 @@ end_time - start_time
 # Again, split the data into 1000 groups of 1000 rows each.
 datasf$uniq <- rep(1:1000, each=1000)[1:nrow(datasf)] #This is for up to 1 million points. To increase the max number of points, increase the value for max repetitions. To change the number of points to run per time, change the value in the argument each.
 
-# Start the extraction and time it -- xx minutes
+# Start the extraction and time it 
 start_time <- Sys.time()
 dataoutput <- data.frame()
 for(x in unique(datasf$uniq)){
+  
+  ## Filter to chunk by uniq index
   chunk <- datasf %>% filter(uniq == x)
   
   ## Perform static extraction
@@ -256,6 +260,8 @@ for(x in unique(datasf$uniq)){
   dataoutput <- rbind(dataoutput, temp)
 }
 end_time <- Sys.time()
+
+# time for 100000 points -- xx minutes
 end_time - start_time
 
 
