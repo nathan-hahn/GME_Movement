@@ -261,7 +261,7 @@ for(x in unique(datasf$uniq)){
 }
 end_time <- Sys.time()
 
-# time for 100000 points -- xx minutes
+# time for 100000 points -- 35 minutes
 end_time - start_time
 
 
