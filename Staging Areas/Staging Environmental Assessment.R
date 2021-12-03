@@ -76,25 +76,25 @@ locs <- locs.sf %>% terra::vect()
 # create matrix for used points
 used <- matrix(1, nrow = nrow(df), ncol = 17)
 
-# ~17 seconds
+# ~60 seconds
 system.time({
-used[,2] <- extract(dist2ag, locs)[,2]
-used[,3] <- extract(dist2agedge, locs)[,2]
-used[,4] <- extract(dist2water, locs)[,2]
+used[,2] <- terra::extract(dist2ag, locs)[,2]
+used[,3] <- terra::extract(dist2agedge, locs)[,2]
+used[,4] <- terra::extract(dist2water, locs)[,2]
 used[,5] <- as.numeric(st_intersects(locs.sf, drains.1000)) # point to polygon
 used[,5][is.na(used[,5])] <- 0 # convert NAs to 0's
-used[,6] <- extract(slope, locs)[,2]
-used[,7] <- extract(gHM, locs)[,2]
-used[,8] <- extract(pa, locs)[,2]
-used[,9] <- extract(lc, locs)[,2]
-used[,10] <- extract(dist2forest, locs)[,2]
-used[,11] <- extract(prop.ag.250, locs)[,2]
-used[,12] <- extract(prop.ag.1500, locs)[,2]
-used[,13] <- extract(prop.forest.250, locs)[,2]
-used[,14] <- extract(prop.forest.1500, locs)[,2]
-used[,15] <- extract(dist2paedge, locs)[,2]
-used[,16] <- extract(prop.settlement.250, locs)[,2]
-used[,17] <- extract(prop.settlement.1500, locs)[,2]
+used[,6] <- terra::extract(slope, locs)[,2]
+used[,7] <- terra::extract(gHM, locs)[,2]
+used[,8] <- terra::extract(pa, locs)[,2]
+used[,9] <- terra::extract(lc, locs)[,2]
+used[,10] <- terra::extract(dist2forest, locs)[,2]
+used[,11] <- terra::extract(prop.ag.250, locs)[,2]
+used[,12] <- terra::extract(prop.ag.1500, locs)[,2]
+used[,13] <- terra::extract(prop.forest.250, locs)[,2]
+used[,14] <- terra::extract(prop.forest.1500, locs)[,2]
+used[,15] <- terra::extract(dist2paedge, locs)[,2]
+used[,16] <- terra::extract(prop.settlement.250, locs)[,2]
+used[,17] <- terra::extract(prop.settlement.1500, locs)[,2]
 })
 
 
@@ -156,6 +156,14 @@ ds.st.sub <- ds.st %>%
   filter(dist2ag > 0)
 
 
+##### test autocorrelation variogram #####
+library(gstat)
+t <- st_as_sf(ds.st.sub, coords = c('x','y'), crs = 32736)
+t <- as_Spatial(t)
+
+t.var<-gstat::variogram(vote~1, t)
+plot(t.var)
+
 ##### test spatial scales for moving window metrics #####
 mod.ag.step <- glmer(vote ~ prop.ag.250 + (1|subject_name),
                 data = ds.st.sub, family = binomial)
@@ -176,9 +184,6 @@ AICc(mod.for.step, mod.for.daily, mod.for.dist) # forest step scale is better by
 ## Global model
 mod.global.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + (1|subject_name), 
                     data = ds.st.sub, family = binomial)
-
-mod.global.2 <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + prop.settlement.1500 + dist2paedge + (1|subject_name), 
-                        data = ds.st.sub, family = binomial)
 
 ## Human footprint model
 mod.hm.sub <- glmer(vote ~ prop.ag.250 + gHM + dist2paedge + (1|subject_name),
@@ -293,20 +298,33 @@ ds.st.sub <- ds.st.sub[!is.na(ds.st.sub$rel.staging.occ),]
 summary(ds.st.sub$rel.staging.occ)
 summary(ds.st.sub$occ.weights)
 
+ds.st.sub$occ.weights <- (ds.st.sub$occ.weights-min(ds.st.sub$occ.weights))/(max(ds.st.sub$occ.weights)-min(ds.st.sub$occ.weights))
 
 hist(ds.st.sub$rel.staging.occ)
+
+##### test autocorrelation variogram #####
+library(gstat)
+t <- st_as_sf(ds.st.sub, coords = c('x','y'), crs = 32736)
+t <- as_Spatial(t)
+
+hscat(rel.staging.occ~1, t, 1:9*10000)
+
+
+t.var<-gstat::variogram(rel.staging.occ~1, t, cloud = T)
+plot(t.var)
+
+TheVariogramModel <- vgm(psill=50, model="Exp", nugget=0.02, range=100000)
+FittedModel <- fit.variogram(t.var, model=TheVariogramModel)
+plot(t.var, model=FittedModel)
+
 
 ##### Fit Regression Model #####
 
 mod.global.sub.1000 <- glmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + scale(x) + scale(y) + (1|subject_name), 
-                            weights = scale(occ.weights), # weights supplied as total counts that proportions arise from
+                            weights = occ.weights, # weights supplied as total counts that proportions arise from
                             data = ds.st.sub,
                             family = binomial)
 summary(mod.global.sub.1000)
-
-mod.global.sub.1000.xy <- lmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + scale(x) + scale(y) + (1|subject_name), 
-                               data = ds.st.sub, REML = FALSE)
-summary(mod.global.sub.1000.xy)
 
 sjPlot::plot_models(mod.global.sub.1000, mod.global.sub.1000.xy)
 
