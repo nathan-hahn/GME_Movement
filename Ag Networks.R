@@ -238,4 +238,9 @@ t <- tmap_arrange(stage.points, ag.betweeness)
 tmap_save(t, "Staging Panel.png", dpi = 300)
 tmap_save(stage.points, "Staging Relocs Map.png", dpi = 300)
 
+## relative density of staging to non-staging
+dens.r <- raster::raster('./Staging Areas/staging_reldensity_250m.tif')
+rel.dens.staging <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'serengeti-mara') +
+  tm_shape(dens.r, raster.downsample = FALSE) + tm_raster(palette = RColorBrewer::brewer.pal(5, 'YlOrRd'), title = 'Relative Staging Occurance')
+rel.dens.staging
 
