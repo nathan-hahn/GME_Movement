@@ -16,6 +16,7 @@ df <- as.data.frame(data.table::fread('./movdata/GMEcollars_004_stageclassified_
 df$V1 <- NULL
 df$V1 <- NULL
 df$...1 <- NULL
+df$used <- NULL
 
 df$vote <- as.factor(df$vote)
 table(df$vote)
@@ -40,7 +41,6 @@ prop.forest.250 <- rast("./spatial data/hansen_forest_pct_250.tif")
 prop.forest.1500 <- rast("./spatial data/hansen_forest_pct_1500.tif")
 dist2ag <- rast("./spatial data/dist2ag_estes_32736_2019-11-21.tif")
 dist2agedge <- rast("./spatial data/dist2agedge_estes_20200629.tif")
-#drains <- rast("./spatial data/drains_buff1000_estes-2021-11-17.tif") # to be created
 dist2water <- rast("./spatial data/dist2merged_water_20200624.tif")
 dist2forest <- rast("./spatial data/dist2forest_hansen_cover60_32736_30.tif") 
 slope <- rast("./spatial data/slope_estes_32736_2020-05-12.tif")
@@ -107,7 +107,8 @@ mode(used) = "numeric"
 used2 <- as.data.frame(used)
 used2$uid <- as.character(locs.sf$uid)
 colnames(used2) <- c("used","dist2ag", "dist2agedge", "dist2water", 'drains1000', 'slope', 'gHM', 'pa', 'lc', 'dist2forest', 
-                     'prop.ag.250', 'prop.ag.1500', 'prop.forest.250', 'prop.forest.1500', 'dist2paedge', 'prop.settlement.250', 'prop.settlement.1500', 'merge_id')
+                     'prop.ag.250', 'prop.ag.1500', 'prop.forest.250', 'prop.forest.1500', 'dist2paedge', 'prop.settlement.250', 
+                     'prop.settlement.1500', 'merge_id')
 head(used2)
 
 # unstandardized data frame
@@ -127,8 +128,19 @@ summary(used.df$dist2agedge)
 summary(used.df$dist2paedge)
 
 
+##### Add Forest Proximity Index #####
+## Pre-computed 
+
+# read in results - tagged by uid
+prox.index.1000 <- read.csv('spatial data/Forest_hansen/distanceloop/output/proximity_index_table_1000.csv') %>%
+  select(prox.index.1000 = prox.index, uid)
+
+used.df <- merge(used.df, prox.index.1000, 'uid', all.x = TRUE)
+summary(used.df$prox.index)
+
+
 ##### Save output #####
-#write.csv(used.df, './Staging Areas/movdata/movdat_004_lsdv.csv')
+write.csv(used.df, './Staging Areas/movdata/movdat_004_lsdv.csv')
 
 
 ###########################################################################################################
@@ -141,19 +153,22 @@ summary(used.df$dist2paedge)
 used.df <- as.data.frame(data.table::fread('./Staging Areas/movdata/movdat_004_lsdv.csv'))
 used.df$V1 <- NULL
 
+## **remove relocations within ag**
+ds.st.sub <- used.df %>%
+  filter(lubridate::hour(date) %in% c(6:18)) #%>%
+  #filter(dist2ag > 0)
+
+
 ## standardize covs
 covariates <- c("dist2ag", "dist2agedge", "dist2water", 'slope', 'dist2forest', 'dist2paedge')
-ds.st <- used.df %>%
-  dplyr::select(subject_name, burst, x, y, date, vote, all_of(covariates), drains1000, gHM, prop.ag.250, prop.ag.1500,
-                prop.forest.250, prop.forest.1500, prop.settlement.250, prop.settlement.1500) %>%
+ds.st.sub <- ds.st.sub %>%
+  dplyr::select(uid, subject_name, burst, x, y, date, vote, all_of(covariates), drains1000, gHM, prop.ag.250, prop.ag.1500,
+                prop.forest.250, prop.forest.1500, prop.settlement.250, prop.settlement.1500, prox.index.1000, pa) %>%
   mutate_at(covariates, .funs = scale) %>%
   mutate(drains1000 = as.factor(drains1000)) %>%
+  mutate(pa = as.factor(pa)) %>%
+  mutate(prox.index.1000 = scale(prox.index.1000)) %>%
   droplevels()
-
-## **remove relocations within ag**
-ds.st.sub <- ds.st %>%
-  #filter(lubridate::hour(date) %in% c(6:18)) %>%
-  filter(dist2ag > 0)
 
 
 ##### test autocorrelation variogram #####
@@ -177,38 +192,48 @@ mod.for.daily <- glmer(vote ~ prop.forest.1500 + (1|subject_name),
                        data = ds.st.sub, family = binomial)
 mod.for.dist <- glmer(vote ~ dist2forest + (1|subject_name),
                       data = ds.st.sub, family = binomial)
-AICc(mod.for.step, mod.for.daily, mod.for.dist) # forest step scale is better by AICc
+mod.prox.1000 <- glmer(vote ~ prox.index.1000 + (1|subject_name),
+                       data = ds.st.sub, family = binomial)
+
+AICc(mod.for.step, mod.for.daily, mod.for.dist, mod.prox.1000) # forest step scale is better by AICc
+
+## correlation between forest prop and proximity index
+t <- lm(prox.index.1000 ~ prop.forest.250, data = ds.st.sub)
 
 ##### Fit candidate models #####
 
 ## Global model
-mod.global.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + (1|subject_name), 
+mod.global.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + pa + (1|subject_name), 
                     data = ds.st.sub, family = binomial)
 
 ## Human footprint model
-mod.hm.sub <- glmer(vote ~ prop.ag.250 + gHM + dist2paedge + (1|subject_name),
+mod.hm.sub <- glmer(vote ~ prop.ag.1500 + gHM + pa + (1|subject_name),
                 data = ds.st.sub, family = binomial)
 
 ## Natural features model
 mod.nat.sub <- glmer(vote ~ prop.forest.250 + drains1000 + slope + (1|subject_name),
                  data = ds.st.sub, family = binomial)
 
+## Strongest predictors
+mod.str.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + gHM + (1|subject_name),
+                     data = ds.st.sub, family = binomial)
 
-summary(mod.global.sub)
-sjPlot::plot_models(mod.global.sub)
+mod.str2.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + (1|subject_name),
+                     data = ds.st.sub, family = binomial)
 
+mod.str3.sub <- glmer(vote ~ gHM + (1|subject_name),
+                                    data = ds.st.sub, family = binomial)
 
-# test for spatial autocorrelation with moran's I test 
-spdat <- SpatialPointsDataFrame(cbind(ds$x, ds$y), ds)
-lstw  <- spdep::nb2listw(knn2nb(knearneigh(spdat, k = 10)))
-spdep::moran.mc(residuals(mod.1), lstw, 999)
+mod.str4.sub <- glmer(vote ~ gHM*prop.forest.250 + (1|subject_name),
+                      data = ds.st.sub, family = binomial)
 
-# test with x/y added to model
-mod.global.sub.xy <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + scale(x) + scale(y) + (1|subject_name), 
-                        data = ds.st.sub, family = binomial)
+mod.global.interaction <- glmer(vote ~ prop.ag.1500 + gHM*prop.forest.250 + drains1000 + slope + pa + (1|subject_name), 
+                          data = ds.st.sub, family = binomial)
 
+AICc(mod.global.sub, mod.hm.sub, mod.nat.sub, mod.str.sub, mod.str2.sub, mod.str3.sub, mod.str4.sub, mod.global.interaction)
 
-sjPlot::plot_models(mod.global.sub, mod.global.sub.xy)
+summary(mod.global.interaction)
+sjPlot::plot_model(mod.global.interaction)
 
 #### Grid-Based Model Fitting ####
 
@@ -219,11 +244,11 @@ locs <- ds.st.sub %>%
   st_as_sf(coords = c('x','y'), crs = 32736) %>%
   terra::vect()
 # split into stage/no.stage dataframes
-locs.stage <- terra::vect(locs.sf[locs.sf$vote == 1,])
-locs.nostage <- terra::vect(locs.sf[locs.sf$vote == 0,])
+locs.stage <- locs[locs$vote == 1,]
+locs.nostage <- locs[locs$vote == 0,]
 
 # reference raster - 250m or 1000m
-r <- terra::rast(locs, extent = ext(gHM), resolution = 1000)
+r <- terra::rast(locs, extent = ext(gHM), resolution = 250)
 
 r.stage <- terra::rasterize(locs.stage, r, fun = 'sum')
 #r.stage <- terra::classify(r.stage, cbind(NA, 0)) # set no data to (0)
@@ -255,14 +280,15 @@ occ.weights <- rast(occ.weights)
 plot(occ.weights)
 
 # check results
+gme <- sf::st_read('~/Dropbox (Personal)/CSU/GME_Movement/spatial data/GSE/GSE_2020.shp')
 YlOrRd <- RColorBrewer::brewer.pal(9, 'YlOrRd')
 library(mapview)
 mapview(gme, zcol = 'pa_status', col.regions = RColorBrewer::brewer.pal(3, 'Greens')) + 
   mapview(raster::raster(r.nostage), col.regions = YlOrRd, layer.name = 'non-staging relocations count') + 
   mapview(raster::raster(r.stage), col.regions = YlOrRd, layer.name = 'staging relocations count') + 
-  mapview(raster::raster(stack.calc), col.regions = YlOrRd, layer.name = 'relative density of staging')
+  mapview(raster::raster(rel.staging.occ), col.regions = YlOrRd, layer.name = 'relative density of staging')
 
-plot(stack.calc)
+
 
 #terra::writeRaster(stack.calc, './Staging Areas/staging_reldensity_1000m.tif')
 
@@ -276,8 +302,6 @@ rel.staging.occ
 
 tmap_save(rel.staging.occ, "Rel Staging Map.png", dpi = 300)
 
-##### Moving Window Smoother #####
-#????#
 
 
 ##### Extract Relative Staging Occurrence #####
@@ -290,7 +314,7 @@ locs.sf <- st_as_sf(ds.st.sub, coords = c('x','y'), crs = study.area)
 locs <- locs.sf %>% terra::vect()
 
 # extract to new column
-rel.staging.occ <- terra::rast('./Staging Areas/staging_reldensity_1000m.tif')
+#rel.staging.occ <- terra::rast('./Staging Areas/staging_reldensity_1000m.tif')
 #occ.weights <- terra::rast('...')
 ds.st.sub$rel.staging.occ <- terra::extract(rel.staging.occ, locs)[,2]
 ds.st.sub$occ.weights <- terra::extract(occ.weights, locs)[,2]
@@ -298,7 +322,7 @@ ds.st.sub <- ds.st.sub[!is.na(ds.st.sub$rel.staging.occ),]
 summary(ds.st.sub$rel.staging.occ)
 summary(ds.st.sub$occ.weights)
 
-ds.st.sub$occ.weights <- (ds.st.sub$occ.weights-min(ds.st.sub$occ.weights))/(max(ds.st.sub$occ.weights)-min(ds.st.sub$occ.weights))
+#ds.st.sub$occ.weights <- (ds.st.sub$occ.weights-min(ds.st.sub$occ.weights))/(max(ds.st.sub$occ.weights)-min(ds.st.sub$occ.weights))
 
 hist(ds.st.sub$rel.staging.occ)
 
@@ -320,13 +344,20 @@ plot(t.var, model=FittedModel)
 
 ##### Fit Regression Model #####
 
-mod.global.sub.1000 <- glmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + scale(x) + scale(y) + (1|subject_name), 
-                            weights = occ.weights, # weights supplied as total counts that proportions arise from
+mod.global.sub.1000 <- glmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + pa + (1|subject_name), 
+                            weights = log(occ.weights), # weights supplied as total counts that proportions arise from
                             data = ds.st.sub,
                             family = binomial)
 summary(mod.global.sub.1000)
 
-sjPlot::plot_models(mod.global.sub.1000, mod.global.sub.1000.xy)
+mod.global.sub.250 <- glmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + pa + (1|subject_name), 
+                             weights = log(occ.weights), # weights supplied as total counts that proportions arise from
+                             data = ds.st.sub,
+                             family = binomial)
+summary(mod.global.sub.250)
+
+
+sjPlot::plot_models(mod.global.sub.1000, mod.global.sub.250)
 
 plot(mod.global.sub.1000)
 plot(mod.global.sub.1000.xy)
