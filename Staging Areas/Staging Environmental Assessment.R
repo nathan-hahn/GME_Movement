@@ -7,12 +7,14 @@ library(MuMIn)
 library(mapview)
 library(tmap)
 
+Sys.setenv(TZ='Africa/Nairobi')
+
 ###########################################################################################################
 ## ///////////////////////////////////////////// Data Prep ///////////////////////////////////////////// ##
 ###########################################################################################################
 
 #### Load Data ####
-df <- as.data.frame(data.table::fread('./movdata/GMEcollars_004_stageclassified_20211019.csv'))
+df <- as.data.frame(data.table::fread('./movdata/GMEcollars_004_stageclassified_20211019.csv', tz = ''))
 df$V1 <- NULL
 df$V1 <- NULL
 df$...1 <- NULL
@@ -105,11 +107,14 @@ summary(used)
 # create data frame
 mode(used) = "numeric"
 used2 <- as.data.frame(used)
-used2$uid <- as.character(locs.sf$uid)
+used2$uid <- as.numeric(locs.sf$uid)
 colnames(used2) <- c("used","dist2ag", "dist2agedge", "dist2water", 'drains1000', 'slope', 'gHM', 'pa', 'lc', 'dist2forest', 
                      'prop.ag.250', 'prop.ag.1500', 'prop.forest.250', 'prop.forest.1500', 'dist2paedge', 'prop.settlement.250', 
                      'prop.settlement.1500', 'merge_id')
 head(used2)
+
+# check for duplicates
+length(unique(used2$merge_id)) == nrow(used2)
 
 # unstandardized data frame
 used.df <- cbind(df, used2)
@@ -118,7 +123,9 @@ head(used.df)
 test <- subset(used.df, uid != merge_id)
 nrow(test) # should be zero
 used.df$merge_id <- NULL
-used.df$used <- 1
+
+# check for duplicates
+length(unique(used.df$uid)) == nrow(used.df)
 
 ##### Adjust ag edge #####
 used.df$dist2agedge <- ifelse(used.df$lc.estes == 1, -(used.df$dist2agedge), used.df$dist2agedge)
@@ -127,16 +134,18 @@ used.df$dist2paedge <- ifelse(used.df$pa == 1, -(used.df$dist2paedge), used.df$d
 summary(used.df$dist2agedge)
 summary(used.df$dist2paedge)
 
+# check for duplicates
+length(unique(used.df$uid)) == nrow(used.df)
 
 ##### Add Forest Proximity Index #####
 ## Pre-computed 
 
 # read in results - tagged by uid
-prox.index.1000 <- read.csv('spatial data/Forest_hansen/distanceloop/output/proximity_index_table_1000.csv') %>%
-  select(prox.index.1000 = prox.index, uid)
-
-used.df <- merge(used.df, prox.index.1000, 'uid', all.x = TRUE)
-summary(used.df$prox.index)
+# prox.index.250 <- read.csv('spatial data/Forest_hansen/distanceloop/output/proximity_index_table_250.csv') %>%
+#   select(prox.index.250 = prox.index, prox.index.mean, uid)
+# 
+# used.df <- merge(used.df, prox.index.250, 'uid', all.x = TRUE)
+# summary(used.df$prox.index.250)
 
 
 ##### Save output #####
@@ -158,16 +167,36 @@ ds.st.sub <- used.df %>%
   filter(lubridate::hour(date) %in% c(6:18)) #%>%
   #filter(dist2ag > 0)
 
+# check for duplicates
+length(unique(ds.st.sub$uid)) == nrow(ds.st.sub)
+
+## Load proximity index 
+prox.index <- read.csv('spatial data/Forest_hansen/distanceloop/output/proximity_index_table_250.csv')
+ds.st.sub <- merge(ds.st.sub, prox.index, c('uid', 'x', 'y'), all.x = T)
+
+# update with search radius
+names(ds.st.sub)[names(ds.st.sub) == 'prox.index'] <- 'prox.index.250'
+
+## adjust proximity index values
+ds.st.sub$prox.index.250 <- ifelse(is.na(ds.st.sub$prox.index.250), 0.00001, ds.st.sub$prox.index.250)
+
+# ds.st.sub$prox.norm = (ds.st.sub$prox.index.250 - min(ds.st.sub$prox.index.250)) / (max(ds.st.sub$prox.index.250) - min(ds.st.sub$prox.index.250))
+# 
+# ds.st.sub %>% group_by(vote) %>% summarise(mean = mean(prox.index.250),
+#                                            mean.norm = mean(prox.norm),
+#                                            mean.scale = mean(scale(prox.index.250)),
+#                                            mean.log = mean(log(prox.index.250)))
 
 ## standardize covs
 covariates <- c("dist2ag", "dist2agedge", "dist2water", 'slope', 'dist2forest', 'dist2paedge')
 ds.st.sub <- ds.st.sub %>%
   dplyr::select(uid, subject_name, burst, x, y, date, vote, all_of(covariates), drains1000, gHM, prop.ag.250, prop.ag.1500,
-                prop.forest.250, prop.forest.1500, prop.settlement.250, prop.settlement.1500, prox.index.1000, pa) %>%
+                prop.forest.250, prop.forest.1500, prop.settlement.250, prop.settlement.1500, prox.index.250, pa) %>%
+  mutate(forest = if_else(dist2forest == 0, 1, 0)) %>%
   mutate_at(covariates, .funs = scale) %>%
   mutate(drains1000 = as.factor(drains1000)) %>%
   mutate(pa = as.factor(pa)) %>%
-  mutate(prox.index.1000 = scale(prox.index.1000)) %>%
+  #mutate(prox.index.250 = log(prox.index.250)) %>%
   droplevels()
 
 
@@ -192,13 +221,16 @@ mod.for.daily <- glmer(vote ~ prop.forest.1500 + (1|subject_name),
                        data = ds.st.sub, family = binomial)
 mod.for.dist <- glmer(vote ~ dist2forest + (1|subject_name),
                       data = ds.st.sub, family = binomial)
-mod.prox.1000 <- glmer(vote ~ prox.index.1000 + (1|subject_name),
-                       data = ds.st.sub, family = binomial)
 
-AICc(mod.for.step, mod.for.daily, mod.for.dist, mod.prox.1000) # forest step scale is better by AICc
+AICc(mod.for.step, mod.for.daily, mod.for.dist) # forest step scale is better by AICc
+
+# check proximity index
+mod.prox.250 <- glmer(vote ~ log(prox.index.250) + (1|subject_name),
+                      data = ds.st.sub, family = binomial)
+
 
 ## correlation between forest prop and proximity index
-t <- lm(prox.index.1000 ~ prop.forest.250, data = ds.st.sub)
+t <- lm(log(prox.index.250) ~ prop.forest.250, data = ds.st.sub)
 
 ##### Fit candidate models #####
 
@@ -227,7 +259,7 @@ mod.str3.sub <- glmer(vote ~ gHM + (1|subject_name),
 mod.str4.sub <- glmer(vote ~ gHM*prop.forest.250 + (1|subject_name),
                       data = ds.st.sub, family = binomial)
 
-mod.global.interaction <- glmer(vote ~ prop.ag.1500 + gHM*prop.forest.250 + drains1000 + slope + pa + (1|subject_name), 
+mod.global.interaction <- glmer(vote ~ prop.ag.1500 + gHM*prop.forest.250 + log(prox.index.250) + drains1000 + slope + pa + (1|subject_name), 
                           data = ds.st.sub, family = binomial)
 
 AICc(mod.global.sub, mod.hm.sub, mod.nat.sub, mod.str.sub, mod.str2.sub, mod.str3.sub, mod.str4.sub, mod.global.interaction)
@@ -240,7 +272,8 @@ sjPlot::plot_model(mod.global.interaction)
 ##### Create Grid #####
 ## create grid -- 250m with extent based on gHM Estes (1000m res)
 # use model dataframe to create terra vect object
-locs <- ds.st.sub %>%
+locs <- used.df %>%
+  filter(lc.estes != 1) %>%
   st_as_sf(coords = c('x','y'), crs = 32736) %>%
   terra::vect()
 # split into stage/no.stage dataframes
@@ -251,9 +284,7 @@ locs.nostage <- locs[locs$vote == 0,]
 r <- terra::rast(locs, extent = ext(gHM), resolution = 250)
 
 r.stage <- terra::rasterize(locs.stage, r, fun = 'sum')
-#r.stage <- terra::classify(r.stage, cbind(NA, 0)) # set no data to (0)
 r.nostage <- terra::rasterize(locs.nostage, r, fun = 'sum')
-#r.nostage <- terra::classify(r.nostage, cbind(NA, 0)) # set no data to (0)
 
 stack <- raster::stack(raster::raster(r.stage), raster::raster(r.nostage))
 
@@ -288,14 +319,17 @@ mapview(gme, zcol = 'pa_status', col.regions = RColorBrewer::brewer.pal(3, 'Gree
   mapview(raster::raster(r.stage), col.regions = YlOrRd, layer.name = 'staging relocations count') + 
   mapview(raster::raster(rel.staging.occ), col.regions = YlOrRd, layer.name = 'relative density of staging')
 
+# check with staging relocs
+mapview(rel.staging.occ, col.regions = YlOrRd, layer.name = 'relative density of staging', alpha = 0.6) 
+  #mapview(st_as_sf(used.df[used.df$vote == 1,], coords = c('x','y'), crs = 32736), col.region = 'red', cex = 1.5, layer.name = 'staging relocs')
 
-
-#terra::writeRaster(stack.calc, './Staging Areas/staging_reldensity_1000m.tif')
+## save the output -- check resolution size
+terra::writeRaster(rel.staging.occ, './Staging Areas/staging_reldensity_250m.tif', overwrite = T) 
 
 ## relative density of staging to non-staging
 library(tmap)
 gme <- sf::st_read('~/Dropbox (Personal)/CSU/GME_Movement/spatial data/GSE/GSE_2020.shp')
-dens.r <- raster::raster('./Staging Areas/staging_reldensity_1000m.tif')
+dens.r <- raster::raster('./Staging Areas/staging_reldensity_250m.tif')
 rel.staging.occ <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'serengeti-mara') +
   tm_shape(dens.r, raster.downsample = FALSE) + tm_raster(palette = RColorBrewer::brewer.pal(5, 'YlOrRd'), title = 'Relative Staging Occurance')
 rel.staging.occ
@@ -350,11 +384,11 @@ mod.global.sub.1000 <- glmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + 
                             family = binomial)
 summary(mod.global.sub.1000)
 
-mod.global.sub.250 <- glmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + pa + (1|subject_name), 
+mod.global.sub.250.int <- glmer(rel.staging.occ ~ prop.ag.1500 + gHM*prop.forest.250 + drains1000 + slope + pa + (1|subject_name), 
                              weights = log(occ.weights), # weights supplied as total counts that proportions arise from
                              data = ds.st.sub,
                              family = binomial)
-summary(mod.global.sub.250)
+summary(mod.global.sub.250.int)
 
 
 sjPlot::plot_models(mod.global.sub.1000, mod.global.sub.250)
