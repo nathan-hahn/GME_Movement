@@ -2,8 +2,10 @@
 library(tidyverse)
 library(lubridate)
 
+Sys.setenv(TZ='Africa/Nairobi')
+
 ## Load the data
-gme.stage <- as.data.frame(data.table::fread('./movdata/GMEcollars_004_stageclassified_20211019.csv'))
+gme.stage <- as.data.frame(data.table::fread('./movdata/GMEcollars_004_stageclassified_20211019.csv', tz=''))
 
 gme.stage <- gme.stage %>%
   dplyr::select(uid, subject_name, year.cuts, tactic.season, tactic.agg, x, y, date, dist, id, subject_sex, region, 
@@ -56,7 +58,8 @@ length <- gme.stage %>%
 
 boxplot(length$n)
 
-hist(length$n)
+hist(length$n, xlab = 'staging length (hours)', main = 'Histogram of staging length', breaks = 12)
+
 
 #' Summarise staging frequency distribution by individual and tactic. Use yearly tactics (n=101) 
 #' Note the Rare group with 100% stage percentages have very small numbers of 
@@ -71,7 +74,6 @@ stage.summary <- gme.stage %>%
   filter(n.raid > 5)
 
 boxplot(stage.summary$pct.stage ~ stage.summary$tactic.season,
-        main = 'distribution of staging frequency by individuals in the 4 tactics',
         xlab = 'Tactics (Rare to Habitual)', ylab = 'Pct. of Raids with a Stage')
 
 #' Summarise inter-annual variation in staging by individuals - coefficient of variation
@@ -119,22 +121,8 @@ window$window.length <- as.numeric(window$window.length)
 # check
 #View(window)
 
-# plot and correlation test
+# plot
 boxplot(window$stage.pct ~ window$window.length)
-
-cor.test(window$stage.pct, window$window.length, method = 'spearman')
-
-
-#' ##### Plot the data on a map
-
-##### Plot Staging Events #####
-library(sf)
-gme <- sf::st_read('~/Dropbox (Personal)/CSU/GME_Movement/spatial data/GSE/GSE_2020.shp') 
-stage.relocs <- filter(gme.stage, vote == 1)
-
-ggplot(data = gme) + geom_sf() + coord_sf(datum=st_crs(32736)) + 
-  geom_point(data = stage.relocs, aes(x, y, color = 'red'), size = 0.2, alpha = 0.2) +
-  labs(color = 'staging relocations')
 
 #' Table of staging events and ag bouts for each individual-year
 stage.summary <- gme.stage %>%
@@ -174,6 +162,7 @@ mcp.areas <- mcp.areas@data %>%
 
 gme.stage <- inner_join(gme.stage, mcp.areas, by = c('subject_name', 'year.cuts'))
 
+remove(t)
 
 ## Get daily displacement
 gme.stage <- gme.stage %>%
@@ -182,12 +171,31 @@ gme.stage <- gme.stage %>%
 
 ## Get daily displacement only during ag use
 ag.mu.dailyDist <- gme.stage %>%
+  #filter(vote != 1) %>% # filter out staging events to prevent conflation of staging with movement
   group_by(subject_name, year.cuts, ag.window.ext) %>%
   summarise(ag.mu.dailyDist = mean(dailyDist)) %>%
   filter(ag.window.ext == 1) %>%
   dplyr::select(-ag.window.ext)
 
 gme.stage <- inner_join(gme.stage, ag.mu.dailyDist, by = c('subject_name', 'year.cuts'))
+
+## Get tortuosity
+tor <- gme.stage %>%
+  group_by(dayBurst) %>%
+  summarise(ag.window.ext = as.numeric(max(ag.window.ext)),
+            vote = max(vote),
+            l = n(),
+            r = sum(dist), 
+            r2n = raster::pointDistance(c(first(x),first(y)), c(last(x),last(y)), lonlat = F), ## net euclidean distance
+            tor = r2n/r, # Troup method
+            tor2 = l/r ) # GBR method
+
+
+## Get tortuosity only during day
+tor <- gme.stage %>%
+  filter(hour())
+
+
 
 ## Mean bout length by year
 bout.length <- gme.stage %>%
@@ -220,6 +228,7 @@ mod.df <- gme.stage %>%
     n.raid = length(unique(ag.day.index)),
     #n.day = length(unique(dayBurst)),
     pct.stage = n.stage/n.raid,
+    weights = n.raid
   ) %>% 
   ungroup()
 mod.df <- as.data.frame(mod.df)
@@ -240,63 +249,111 @@ mod.global <- lmer(pct.stage ~ subject_sex + subject_ageClass + mean.bout + log(
 summary(mod.global)
 plot(mod.global)
 
+mod.global.bi <- glmer(pct.stage ~ subject_sex + subject_ageClass + mean.bout + log(year.mcp.area) + log(mu.dailyDist) + mean.ag + (1|subject_name), 
+                  data = mod.df,
+                  weights = weights,
+                  family = binomial)
+
 # sex/age model
 mod.1 <- lmer(pct.stage ~ subject_sex + subject_ageClass + (1|subject_name), data = mod.df, REML = FALSE)
 summary(mod.1)
 plot(mod.1)
+
+mod.1.bi <- glmer(pct.stage ~ subject_sex + subject_ageClass + (1|subject_name), 
+                  data = mod.df,
+                  weights = weights,
+                  family = binomial)
 
 # movement behaviors model
 mod.2 <- lmer(pct.stage ~ log(mu.dailyDist)+log(ag.mu.dailyDist)+log(year.mcp.area)+(1|subject_name), data = mod.df, REML = FALSE)
 summary(mod.2)
 plot(mod.2)
 
+mod.2.bi <- glmer(pct.stage ~ log(mu.dailyDist)+log(ag.mu.dailyDist)+log(year.mcp.area)+(1|subject_name), 
+                  data = mod.df,
+                  weights = weights,
+                  family = binomial)
+
 # ag use behaviors model
 mod.3 <- lmer(pct.stage ~ mean.ag + mean.bout + (1|subject_name), data = mod.df, REML = FALSE)
 summary(mod.3)
 plot(mod.3)
 
+mod.3.bi <- glmer(pct.stage ~ mean.ag + mean.bout + (1|subject_name),
+                  data = mod.df,
+                  weights = weights,
+                  family = binomial)
+
 # ag use + movement model
 mod.4 <- lmer(pct.stage ~ mean.ag + mean.bout + log(year.mcp.area) + log(mu.dailyDist) + log(ag.mu.dailyDist) + (1|subject_name), data = mod.df, REML = FALSE)
 summary(mod.4)
+
+mod.4.bi <- glmer(pct.stage ~ mean.ag + mean.bout + log(year.mcp.area) + log(mu.dailyDist) + log(ag.mu.dailyDist) + (1|subject_name),
+                  data = mod.df,
+                  weights = weights,
+                  family = binomial)
 
 # ag use + sex/age model
 #mod.5 <- lmer(pct.stage ~ mean.ag + mean.bout + subject_sex + subject_ageClass + (1|subject_name), data = mod.df, REML = FALSE)
 
 # combo best performers
 mod.5 <- lmer(pct.stage ~ mean.ag + subject_sex + subject_ageClass + (1|subject_name), data = mod.df, REML = FALSE)
-mod.6 <- lmer(pct.stage ~ mean.ag + log(year.mcp.area) + log(mu.dailyDist) + log(ag.mu.dailyDist) + (1|subject_name), data = mod.df, REML = FALSE)
-mod.7 <- lmer(pct.stage ~ log(mu.dailyDist) + (1|subject_name), data = mod.df, REML = FALSE)
+mod.5.bi <- glmer(pct.stage ~ mean.ag + subject_sex + subject_ageClass + (1|subject_name),
+                  data = mod.df,
+                  weights = weights,
+                  family = binomial)
 
+
+mod.6 <- lmer(pct.stage ~ mean.ag + log(year.mcp.area) + log(mu.dailyDist) + log(ag.mu.dailyDist) + (1|subject_name), data = mod.df, REML = FALSE)
+mod.6.bi <- glmer(pct.stage ~ mean.ag + log(year.mcp.area) + log(mu.dailyDist) + log(ag.mu.dailyDist) + (1|subject_name),
+                  data = mod.df,
+                  weights = weights,
+                  family = binomial)
+
+mod.7 <- lmer(pct.stage ~ log(mu.dailyDist) + (1|subject_name), data = mod.df, REML = FALSE)
+mod.7.bi <- glmer(pct.stage ~ log(mu.dailyDist) + (1|subject_name),
+                  data = mod.df,
+                  weights = weights,
+                  family = binomial)
 
 library(MuMIn)
+# # AICc
+# t <- as.data.frame(AICc(mod.global.bi, mod.1.bi, mod.2.bi, mod.3.bi, mod.4.bi, mod.5.bi, mod.6.bi, mod.7.bi))
+# t$deltaAICc <- qpcR::akaike.weights(t$AICc)$deltaAIC
+# t$AICc_weight <- round(qpcR::akaike.weights(t$AICc)$weights, 2)
+# t$model_likelihood <- round(qpcR::akaike.weights(t$AICc)$rel.LL, 2)
+# t$loglik <- c(logLik(mod.global.bi), logLik(mod.1.bi), logLik(mod.2.bi), logLik(mod.3.bi), logLik(mod.4.bi), logLik(mod.5.bi), logLik(mod.6.bi), logLik(mod.7.bi))
+# t$mod.formula <- c(mod.global.bi@call$formula, mod.1.bi@call$formula, mod.2.bi@call$formula, mod.3.bi@call$formula, mod.4.bi@call$formula, 
+#  mod.5.bi@call$formula, mod.6.bi@call$formula, mod.7.bi@call$formula)
+# t <- t[order(t$AICc),]
+# t
+# 
+# View(t)
+
 # AICc
-t <- as.data.frame(AICc(mod.global, mod.1, mod.2, mod.3, mod.4, mod.5, mod.6, mod.7))
+t <- as.data.frame(AICc(mod.1.bi, mod.2.bi, mod.3.bi, mod.4.bi, mod.5.bi, mod.6.bi, mod.7.bi))
 t$deltaAICc <- qpcR::akaike.weights(t$AICc)$deltaAIC
 t$AICc_weight <- round(qpcR::akaike.weights(t$AICc)$weights, 2)
 t$model_likelihood <- round(qpcR::akaike.weights(t$AICc)$rel.LL, 2)
-t$loglik <- c(logLik(mod.global), logLik(mod.1), logLik(mod.2), logLik(mod.3), logLik(mod.4), logLik(mod.5), logLik(mod.6), logLik(mod.7))
-t$mod.formula <- c(mod.global@call$formula, mod.1@call$formula, mod.2@call$formula, mod.3@call$formula, mod.4@call$formula, 
- mod.5@call$formula, mod.6@call$formula, mod.7@call$formula)
+t$loglik <- c(logLik(mod.1.bi), logLik(mod.2.bi), logLik(mod.3.bi), logLik(mod.4.bi), logLik(mod.5.bi), logLik(mod.6.bi), logLik(mod.7.bi))
+t$mod.formula <- c(mod.1.bi@call$formula, mod.2.bi@call$formula, mod.3.bi@call$formula, mod.4.bi@call$formula, 
+                   mod.5.bi@call$formula, mod.6.bi@call$formula, mod.7.bi@call$formula)
 t <- t[order(t$AICc),]
 t
 
 View(t)
 
+
 # Final table
 t$mod.formula <- as.character(t$mod.formula)
-write.csv(t, './Staging Areas/stage_behavior_modtable.csv')
+write.csv(t, './Staging Areas/stage_behavior_modtable_binomialadjust.csv')
 
-## Deeper eval of mod.6
 
-#'
-plot(mod.2) 
-summary(mod.2)
+#### TODO Add Model Selection Based on Many Competing Models ####
 
-confint(mod.2)
 
-sjPlot::tab_model(mod.2)
-sjPlot::plot_model(mod.2)
-
+#### TODO Try Beta Regression ####
+# https://hansjoerg.me/2019/05/10/regression-modeling-with-proportion-data-part-1/
 
 
 
