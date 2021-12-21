@@ -180,50 +180,6 @@ ag.mu.dailyDist <- gme.stage %>%
 gme.stage <- inner_join(gme.stage, ag.mu.dailyDist, by = c('subject_name', 'year.cuts'))
 
 
-## Get tortuosity - 3hr
-tortuosity <- function(df, x.utm, y.utm, w){
-  # get time difference 
-  l = as.numeric(difftime(gme.stage$date, lag(gme.stage$date,2), units = 'hours'))
-  # calculate net displacement
-  p1 = matrix(c(lag(x.utm,w), lag(y.utm,w)), ncol = 2)
-  p2 = matrix(c(x.utm, y.utm), ncol = 2)
-  #browser()
-  r2n = raster::pointDistance(p1, p2, lonlat = F)
-  tor = l/r2n
-}
-
-
-df <- split(gme.stage, gme.stage$id)
-tor.3 <- sapply(df, FUN = tortuosity, x.utm = df$x, y.utm = df$y, w = 3)
-
-
-## Get tortuosity
-tor.24 <- gme.stage %>%
-  group_by(dayBurst) %>%
-  summarise(ag.window.ext = as.numeric(max(ag.window.ext)),
-            vote = max(vote),
-            l = n(),
-            r = sum(dist), 
-            r2n = raster::pointDistance(c(first(x),first(y)), c(last(x),last(y)), lonlat = F), ## net euclidean distance
-            tor = r2n/r, # Troup method - susceptible to missing datapoints!
-            tor2 = l/r ) # GBR method
-
-
-## Get tortuosity only during day
-tor.day <- gme.stage %>%
-  group_by(dayBurst) %>%
-  summarise(ag.window.ext = as.numeric(max(ag.window.ext)),
-            vote = max(vote),
-            l = n(),
-            r = sum(dist), # total displacement
-            r2n = raster::pointDistance(c(first(x),first(y)), c(last(x),last(y)), lonlat = F), # net displacement
-            tor = r2n/r, # Troup method - susceptible to missing datapoints!
-            tor2 = log(l/r2n) ) # GBR method 
-
-
-tor.day %>% group_by(vote) %>%
-  summarise(mean = mean(tor2))
-
 
 ## Mean bout length by year
 bout.length <- gme.stage %>%
