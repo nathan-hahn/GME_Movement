@@ -23,10 +23,9 @@
 library(tidyverse)
 library(lubridate)
 
-setwd('~/Dropbox (Personal)/CSU/GME_Movement')
-
 # import algorithm results matrix
-result.matrix <- readRDS('stage_loop_result_pct T2.1 seq0 GME_004.RDS')
+#result.matrix <- readRDS('stage_loop_result_pct T2.1 seq0 GME_004.RDS') # original 6am - 6pm
+result.matrix <- readRDS('./Staging Areas/pct loop tests/HMMloop_6to21_seq0_20211223.RDS')
 
 # convert matrix to dataframe for viz
 result.df <- as.data.frame(result.matrix)
@@ -70,7 +69,7 @@ boxplot((1-plot.df$n.stage.err) ~ plot.df$win.end, xlab = 'window end time', yla
 ##### Import dataset #####
 
 # import dataset
-gme <- as.data.frame(data.table::fread('~/Dropbox (Personal)/CSU/GME_Movement/Staging Areas/GMEcollars_004_HMMclassified_stage_20201012.csv'))
+gme <- as.data.frame(data.table::fread('~/Dropbox/CSU/GME_Movement/Staging Areas/GMEcollars_004_HMMclassified_stage_20201012.csv'))
 
 ## unique id for each individual-day
 gme$dayBurst <- paste(gme$id, as.Date(gme$date))
@@ -99,35 +98,65 @@ gme$ag.window.index <- eventIndex
 # prep plot.df and create empty lists
 plot.df <- arrange(plot.df, n.stage.err) # order by descending error
 plot.df$n.stage.acc <- 1-plot.df$n.stage.err # accuracy = 1-error
-eventFlag <- NULL # TRUE/FALSE whether a relocation is part of a stage
-eventIndex <- NULL # Unique ID for stage event
-eventWeight <- NULL # Accuracy of the specific model, to be used for weighting
-eventWeight.all <- NULL
+
+#plot.df <- filter(plot.df, n.stage.acc >= 0.5)
 
 # create new dataframe
 gme.stage <- gme
 
-for (i in 1:dim(plot.df)[1]) { # voting by row of plot.df -- row corresponds with the parameter set and accuracy for each model
-  pct.threshold = plot.df$pct.seq[i]
-  win.size = plot.df$win.siz[i]
-  gme.stage$stage.period <- ifelse(hour(gme.stage$date) >= plot.df$win.start[i] & hour(gme.stage$date) <= plot.df$win.end[i], 1, 0)
+# split up dataframes for memory
+n <- 50
+nr <- nrow(plot.df)
+split <- split(plot.df, rep(1:n, length.out = nr, each = ceiling(nr/n)))
+
+# set sums storage df 
+sums <- NULL
+sums.all <- NULL
+start <- Sys.time()
+for (i in 1:length(split)){
+  df <- split[[i]]
+  eventWeight <- NULL
+  eventWeight.all <- NULL
   
-  t <- gme.stage %>%
-    group_by(dayBurst, stage.period, ag.window.ext) %>%
-    mutate(enc.day = sum(viterbi==1), meander.day = sum(viterbi==2), dw.day = sum(viterbi==3), n.day = n()) %>%
-    mutate(pct = round((enc.day/win.size), 3))
-  
-  # tag all staging events
-  stage.event <- ifelse(t$pct >= pct.threshold & t$stage.period == 1 & t$dw.day == 0, 1, 0)
-  # tag ag staging events
-  ag.stage.event <- ifelse(t$pct >= pct.threshold & t$stage.period == 1 & t$dw.day == 0 & t$ag.window.ext == 1, 1, 0)
-  
-  ## index staging events
-  # eventFlag[[i]] <- ifelse(ag.stage.event == 1, TRUE, FALSE)
-  # eventIndex[[i]] <- inverse.rle(within.list(rle(eventFlag[[i]]),
-  #                                            values[values] <- seq_along(values[values])))
-  eventWeight[[i]] <- ifelse(ag.stage.event == 1, 1*(plot.df$n.stage.acc[i]), 0)
+  for (j in 1:dim(split[[i]])[1]) { # voting by row of split df -- row corresponds with the parameter set and accuracy for each model
+    pct.threshold = df$pct.seq[j]
+    win.size = df$win.siz[j]
+    gme.stage$stage.period <- ifelse(hour(gme.stage$date) >= df$win.start[j] & hour(gme.stage$date) <= df$win.end[j], 1, 0)
+    
+    df2 <- gme.stage %>%
+      group_by(dayBurst, stage.period, ag.window.ext) %>%
+      mutate(enc.day = sum(viterbi==1), meander.day = sum(viterbi==2), dw.day = sum(viterbi==3), n.day = n()) %>%
+      mutate(pct = round((enc.day/win.size), 3))
+    
+    # tag all staging events
+    stage.event <- ifelse(df2$pct >= pct.threshold & df2$stage.period == 1 & df2$dw.day == 0, 1, 0)
+    stage.event <- ifelse(df2$stage.period == 1, stage.event, NA) # NA if a reloc is outside of the time window
+    # tag ag staging events
+    ag.stage.event <- ifelse(df2$pct >= pct.threshold & df2$stage.period == 1 & df2$dw.day == 0 & df2$ag.window.ext == 1, 1, 0)
+    ag.stage.event <- ifelse(df2$stage.period == 1, ag.stage.event, NA) # NA if a reloc is outside of the time window
+    
+    ## produce list of vectors. each vec is length of dataset with 0/1 corresponding to stage tagging for one parameter set
+    # all events - use this to get ensemble accuracy
+    eventWeight.all[[j]] <- ifelse(stage.event == 1, 1*(plot.df$n.stage.acc[i]), stage.event)
+    # only ag events - use this for analysis of results
+    eventWeight[[j]] <- ifelse(ag.stage.event == 1, 1*(plot.df$n.stage.acc[i]), ag.stage.event)
+   
   }
+  
+  # calculate rowSums for each j loop and store as list
+  t <- as.data.frame(do.call(cbind, eventWeight))
+  sums[[i]] <- rowSums(t) # vector of rowsums stored as list element. 
+  t.all <- as.data.frame(do.call(cbind, eventWeight.all))
+  sums.all[[i]] <- rowSums(t.all)
+  
+}  
+
+end <- Sys.time()
+
+end - start
+
+sums.all <- readRDS('Staging Areas/pct loop tests/hmm_ensemble_sums.all_20211229.RDS')
+
 
 #' The resulting dataframe has a column for each model (418) and each row corresponds
 #' to a GPS relocation. If a stage is detected for a given model, the vote value 
@@ -135,21 +164,50 @@ for (i in 1:dim(plot.df)[1]) { # voting by row of plot.df -- row corresponds wit
 
 ## weighted majority vote test ##
 # create dataframe
-df.weight <- as.data.frame(do.call(cbind, eventWeight))
+df.weight <- as.data.frame(do.call(cbind, eventWeight.all)) # use eventWeight.all to check overall accuracy
 dim(df.weight)
 
 # tally weighted votes
-df.weight$stagesum <- rowSums(df.weight)
+df.weight$stagesum <- rowSums(df.weight, na.rm = T)
 # get mean vote value for majority voting
-w.mu <- sum(df.weight$stagesum)/sum(!!df.weight$stagesum)
-# tag ensemble stage events
-df.weight$majority <- ifelse(df.weight$stagesum > w.mu, 1,0)
+w.mu <- sum(df.weight$stagesum)/sum(!!df.weight$stagesum) # mean of values that are not zero
+#w.quant <- quantile(df.weight$stagesum[df.weight$stagesum > 0])
+
+# tag ensemble stage events as those greater than the threshold value
+df.weight$majority <- ifelse(df.weight$stagesum > w.mu, 1,0) # or use 40 when checking accuracy
 
 # relocs in and outside stage
 table(df.weight$majority)
 
+
 ## Assign stage tags to relocs in the main dataset
 gme.stage$vote <- df.weight$majority
+
+
+
+##### Get Ensemble Accuracy #####
+## Not Run
+
+## index staging events
+eventFlag <- ifelse(gme.stage$vote == 1, TRUE, FALSE)
+eventIndex <- inverse.rle(within.list(rle(eventFlag), 
+                                      values[values] <- seq_along(values[values])))
+# assign a unique event index for each stage event
+gme.stage$stage.event.index <- eventIndex
+
+
+table <- gme.stage %>% group_by(ag.window.ext) %>%
+  summarise(n.stage = length(unique(stage.event.index)), 
+            n.stage.adj = n.stage/length(unique(dayBurst)) )
+
+table <- table %>%
+  mutate(n.stage.ratio = n.stage.adj[2]/n.stage.adj[1]) %>%
+  mutate(n.stage.err = n.stage.adj[1]/sum(n.stage.adj)) %>%
+  mutate(n.stage.acc = 1-n.stage.err)
+table
+
+gme.stage$vote.ag <- ifelse(gme.stage$ag.window.ext == 1, gme.stage$vote, 0)
+gme.stage$vote.nonag <- ifelse(gme.stage$ag.window.ext == 0, gme.stage$vote, 0)
 
 #' ##### Staging Area Data Summaries
 
@@ -202,8 +260,8 @@ boxplot(stage.summary$pct.stage ~ stage.summary$tactic.season,
 
 ##### Plot Staging Events #####
 library(sf)
-gme <- sf::st_read('~/Dropbox (Personal)/CSU/GME_Movement/spatial data/GSE/GSE_2020.shp') 
-stage.relocs <- filter(gme.stage, vote == 1)
+gme <- sf::st_read('./spatial data/GSE/GSE_2020.shp') 
+stage.relocs <- filter(gme.stage, vote.nonag == 1)
 
 ggplot(data = gme) + geom_sf() + coord_sf(datum=st_crs(32736)) + 
   geom_point(data = stage.relocs, aes(x, y, color = 'red'), size = 0.2, alpha = 0.2) +
