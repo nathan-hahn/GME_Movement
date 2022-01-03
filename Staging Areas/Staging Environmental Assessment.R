@@ -152,6 +152,23 @@ length(unique(used.df$uid)) == nrow(used.df)
 write.csv(used.df, './Staging Areas/movdata/movdat_004_lsdv.csv')
 
 
+##### Define Seasons #####
+
+# load season windows (Ecoscope colab export)
+seasons <- read.csv('./spatial data/season_time_windows_wetdrytrans_20112021.csv')
+seasons$start <- ymd_hms(seasons$start)
+seasons$end <- ymd_hms(seasons$end)
+
+# cut the dataframe by the start date of each season and label it with season name. 
+# NOTE: switch the label to `unique_season` to check that season dates and labels are matching correctly for your dataset
+rng.name <- cut(used.df$date, breaks = seasons$start, include.lowest = T, labels = head(seasons$season, -1))
+
+# check
+levels(rng.name)
+
+# create variables
+used.df$season <- rng.name
+
 ###########################################################################################################
 ## ///////////////////////////////////////// Model Fitting ///////////////////////////////////////////// ##
 ###########################################################################################################
@@ -191,7 +208,7 @@ ds.st.sub$prox.index.250 <- ifelse(is.na(ds.st.sub$prox.index.250), 0.00001, ds.
 covariates <- c("dist2ag", "dist2agedge", "dist2water", 'slope', 'dist2forest', 'dist2paedge')
 ds.st.sub <- ds.st.sub %>%
   dplyr::select(uid, subject_name, burst, x, y, date, vote, all_of(covariates), drains1000, gHM, prop.ag.250, prop.ag.1500,
-                prop.forest.250, prop.forest.1500, prop.settlement.250, prop.settlement.1500, prox.index.250, pa) %>%
+                prop.forest.250, prop.forest.1500, prop.settlement.250, prop.settlement.1500, prox.index.250, pa, season) %>%
   mutate(forest = if_else(dist2forest == 0, 1, 0)) %>%
   mutate_at(covariates, .funs = scale) %>%
   mutate(drains1000 = as.factor(drains1000)) %>%
@@ -199,6 +216,8 @@ ds.st.sub <- ds.st.sub %>%
   #mutate(prox.index.250 = log(prox.index.250)) %>%
   droplevels()
 
+# season dummy
+ds.st.sub$season <- relevel(ds.st.sub$season, ref = 'wet')
 
 ##### test autocorrelation variogram #####
 library(gstat)
@@ -235,7 +254,7 @@ t <- lm(log(prox.index.250) ~ prop.forest.250, data = ds.st.sub)
 ##### Fit candidate models #####
 
 ## Global model
-mod.global.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + pa + (1|subject_name), 
+mod.global.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + pa + season + (1|subject_name), 
                     data = ds.st.sub, family = binomial)
 
 ## Human footprint model
