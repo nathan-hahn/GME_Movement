@@ -99,7 +99,7 @@ gme$ag.window.index <- eventIndex
 plot.df <- arrange(plot.df, n.stage.err) # order by descending error
 plot.df$n.stage.acc <- 1-plot.df$n.stage.err # accuracy = 1-error
 
-#plot.df <- filter(plot.df, n.stage.acc >= 0.5)
+plot.df <- filter(plot.df, n.stage.acc >= 0.5)
 
 # create new dataframe
 gme.stage <- gme
@@ -145,9 +145,9 @@ for (i in 1:length(split)){
   
   # calculate rowSums for each j loop and store as list
   t <- as.data.frame(do.call(cbind, eventWeight))
-  sums[[i]] <- rowSums(t) # vector of rowsums stored as list element. 
+  sums[[i]] <- rowSums(t, na.rm = T) # vector of rowsums stored as list element. 
   t.all <- as.data.frame(do.call(cbind, eventWeight.all))
-  sums.all[[i]] <- rowSums(t.all)
+  sums.all[[i]] <- rowSums(t.all, na.rm = T)
   
 }  
 
@@ -155,35 +155,34 @@ end <- Sys.time()
 
 end - start
 
-sums.all <- readRDS('Staging Areas/pct loop tests/hmm_ensemble_sums.all_20211229.RDS')
+saveRDS(sums.all, 'Staging Areas/pct loop tests/hmm_ensemble_sums.all_20211229.RDS')
 
 
-#' The resulting dataframe has a column for each model (418) and each row corresponds
+#' The resulting dataframe has a column for each model (xx) and each row corresponds
 #' to a GPS relocation. If a stage is detected for a given model, the vote value 
 #' is tied to the model's accuracy for weighting (1*model.accuracy). 
 
 ## weighted majority vote test ##
 # create dataframe
-df.weight <- as.data.frame(do.call(cbind, eventWeight.all)) # use eventWeight.all to check overall accuracy
+df.weight <- as.data.frame(do.call(cbind, sums.all))
+
+# drop
+remove(eventWeight)
+
 dim(df.weight)
 
-# tally weighted votes
+# tally weighted votes - sum of sums
 df.weight$stagesum <- rowSums(df.weight, na.rm = T)
 # get mean vote value for majority voting
-w.mu <- sum(df.weight$stagesum)/sum(!!df.weight$stagesum) # mean of values that are not zero
-#w.quant <- quantile(df.weight$stagesum[df.weight$stagesum > 0])
-
-# tag ensemble stage events as those greater than the threshold value
-df.weight$majority <- ifelse(df.weight$stagesum > w.mu, 1,0) # or use 40 when checking accuracy
+w.mu <- sum(df.weight$stagesum)/sum(!!df.weight$stagesum)
+# tag ensemble stage events
+df.weight$majority <- ifelse(df.weight$stagesum > w.mu, 1,0)
 
 # relocs in and outside stage
 table(df.weight$majority)
 
-
 ## Assign stage tags to relocs in the main dataset
 gme.stage$vote <- df.weight$majority
-
-
 
 ##### Get Ensemble Accuracy #####
 ## Not Run
@@ -195,7 +194,6 @@ eventIndex <- inverse.rle(within.list(rle(eventFlag),
 # assign a unique event index for each stage event
 gme.stage$stage.event.index <- eventIndex
 
-
 table <- gme.stage %>% group_by(ag.window.ext) %>%
   summarise(n.stage = length(unique(stage.event.index)), 
             n.stage.adj = n.stage/length(unique(dayBurst)) )
@@ -206,28 +204,25 @@ table <- table %>%
   mutate(n.stage.acc = 1-n.stage.err)
 table
 
+
 gme.stage$vote.ag <- ifelse(gme.stage$ag.window.ext == 1, gme.stage$vote, 0)
 gme.stage$vote.nonag <- ifelse(gme.stage$ag.window.ext == 0, gme.stage$vote, 0)
+
 
 #' ##### Staging Area Data Summaries
 
 #' Check the hourly distribution of staging relocations
 
 # check distribution of stage relocs over the course of the day
-t <- filter(gme.stage, vote == 1) %>%
+t <- filter(gme.stage, vote.ag == 1) %>%
   group_by(hour(date)) %>% tally()
 ggplot(t, aes(as.factor(`hour(date)`), n)) + geom_bar(stat = 'identity') +
   xlab('hour of day') + ylab('n stage relocations')
 
-#' The total number of stage events in the dataset is 5692.
+#' The total number of stage events in the dataset is 5692. 7312 with extended dataset. 
 
-## index staging events
-eventFlag <- ifelse(gme.stage$vote == 1, TRUE, FALSE)
-eventIndex <- inverse.rle(within.list(rle(eventFlag),
-                                           values[values] <- seq_along(values[values])))
-gme.stage$stage.event.index <- eventIndex
-
-length(unique(gme.stage$stage.event.index))
+gme.stage %>% group_by(vote.ag) %>%
+  summarise(n = length(unique(stage.event.index)))
 
 #' Calculate distribution of staging frequency prior to crop raiding among individuals. 
 
