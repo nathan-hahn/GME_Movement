@@ -207,12 +207,60 @@ table <- table %>%
   mutate(n.stage.acc = 1-n.stage.err)
 table
 
+# check omission error rate
+gme.stage %>% ungroup() %>% filter(ag.window.ext == 1) %>% summarise(n.agdays = length(unique(ag.window.index)), 
+                                                                     n.stage = length(unique(stage.event.index)),
+                                                                     omission = 1 - n.stage/n.agdays )
 
+##### Adjust for Ag Spatial Threshold #####
+
+# Add dist2ag 
+locs <- sf::st_as_sf(gme.stage, coords = c('x','y'), crs = 32736) %>%
+  terra::vect()
+dist2ag <- terra::rast('./spatial data/dist2ag_estes_32736_2019-11-21.tif')
+
+gme.stage$dist2ag <- terra::extract(dist2ag, locs)[,2]
+
+# Define spatial threshold
+w = 3500
+gme.stage$vote.thresh <- ifelse(gme.stage$dist2ag <= w, gme.stage$vote, 0)
+
+## index staging events
+eventFlag <- ifelse(gme.stage$vote.thresh == 1, TRUE, FALSE)
+eventIndex <- inverse.rle(within.list(rle(eventFlag), 
+                                      values[values] <- seq_along(values[values])))
+# assign a unique event index for each stage event
+gme.stage$stage.event.index <- eventIndex
+
+table <- gme.stage %>% group_by(ag.window.ext) %>%
+  summarise(n.stage = length(unique(stage.event.index)), 
+            n.stage.adj = n.stage/length(unique(dayBurst)) )
+
+table <- table %>%
+  mutate(n.stage.ratio = n.stage.adj[2]/n.stage.adj[1]) %>%
+  mutate(n.stage.err = n.stage.adj[1]/sum(n.stage.adj)) %>%
+  mutate(n.stage.acc = 1-n.stage.err)
+table
+
+
+# spatial threshold - check omission error rate
+gme.stage %>% ungroup() %>% filter(ag.window.ext == 1) %>% summarise(n.agdays = length(unique(ag.window.index)), 
+                                                                     n.stage = length(unique(stage.event.index)),
+                                                                     omission = 1 - n.stage/n.agdays )
+
+
+##### Create stage-tagged dataset #####
+
+## apply ag filter to identify true staging
 gme.stage$vote.ag <- ifelse(gme.stage$ag.window.ext == 1, gme.stage$vote, 0)
 gme.stage$vote.nonag <- ifelse(gme.stage$ag.window.ext == 0, gme.stage$vote, 0)
 
-
-
+## index ag staging events
+eventFlag <- ifelse(gme.stage$vote.ag == 1, TRUE, FALSE)
+eventIndex <- inverse.rle(within.list(rle(eventFlag), 
+                                      values[values] <- seq_along(values[values])))
+# assign a unique event index for each stage event
+gme.stage$stage.event.index <- eventIndex
 #' ##### Staging Area Data Summaries
 
 #' Check the hourly distribution of staging relocations
