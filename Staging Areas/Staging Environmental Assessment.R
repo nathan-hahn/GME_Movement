@@ -14,14 +14,18 @@ Sys.setenv(TZ='Africa/Nairobi')
 ###########################################################################################################
 
 #### Load Data ####
-df <- as.data.frame(data.table::fread('./movdata/GMEcollars_004_stageclassified_20211019.csv', tz = ''))
+#df <- as.data.frame(data.table::fread('./movdata/GMEcollars_004_stageclassified_20211019.csv', tz = ''))
+df <- as.data.frame(data.table::fread('./Staging Areas/movdata/GMEcollars_004_stageclassified_20220109.csv', tz=''))
 df$V1 <- NULL
 df$V1 <- NULL
 df$...1 <- NULL
 df$used <- NULL
 
-df$vote <- as.factor(df$vote)
-table(df$vote)
+# correct pardamat ag to non-ag
+df$ag.used <- ifelse(df$site == 'mep' & df$pa == 2, 0, df$ag.used)
+
+df$vote.ag <- as.factor(df$vote.ag)
+table(df$vote.ag)
 
 # filter to relocs of interest -- fixes during ag use periods
 df <- df %>%
@@ -32,7 +36,7 @@ df <- df %>%
 
 ## Remove existing covariates
 df <- df %>%
-  select(-c('dist2ag', 'dist2agedge', 'dist2permwater', 'dist2seasonalwater', 'dist2water', 'dist2forest', 'gHM', 'slope', 'pa'))
+  dplyr::select(-c('dist2ag', 'dist2agedge', 'dist2permwater', 'dist2seasonalwater', 'dist2water', 'dist2forest', 'gHM', 'slope', 'pa'))
 
 ##### Import covariate layers #####
 
@@ -41,7 +45,8 @@ prop.ag.250 <- rast("./spatial data/estes_ag_pct_250.tif")
 prop.ag.1500 <- rast("./spatial data/estes_ag_pct_1500.tif")
 prop.forest.250 <- rast("./spatial data/hansen_forest_pct_250.tif")
 prop.forest.1500 <- rast("./spatial data/hansen_forest_pct_1500.tif")
-dist2ag <- rast("./spatial data/dist2ag_estes_32736_2019-11-21.tif")
+dist2ag <- rast("./spatial data/dist2ag_estes_32736_2022-01-03.tif")
+#dist2ag <- rast("./spatial data/dist2ag_estes_32736_2019-11-21.tif")
 dist2agedge <- rast("./spatial data/dist2agedge_estes_20200629.tif")
 dist2water <- rast("./spatial data/dist2merged_water_20200624.tif")
 dist2forest <- rast("./spatial data/dist2forest_hansen_cover60_32736_30.tif") 
@@ -64,9 +69,9 @@ drains <- st_read("./spatial data/drains/drains_estes_20211117/drains_estes_-202
   filter(RIV_ORD <= 7)
   
 # buffer by 1000m
-drains.1000 <- st_buffer(drains, dist = 1000) %>%
+drains.1000 <- st_buffer(drains, dist = 250) %>%
   st_union() 
-plot(drains.1000)
+#plot(drains.1000)
 
 ##### Extract #####
 
@@ -108,7 +113,7 @@ summary(used)
 mode(used) = "numeric"
 used2 <- as.data.frame(used)
 used2$uid <- as.numeric(locs.sf$uid)
-colnames(used2) <- c("used","dist2ag", "dist2agedge", "dist2water", 'drains1000', 'slope', 'gHM', 'pa', 'lc', 'dist2forest', 
+colnames(used2) <- c("used","dist2ag", "dist2agedge", "dist2water", 'drains.1000', 'slope', 'gHM', 'pa', 'lc', 'dist2forest', 
                      'prop.ag.250', 'prop.ag.1500', 'prop.forest.250', 'prop.forest.1500', 'dist2paedge', 'prop.settlement.250', 
                      'prop.settlement.1500', 'merge_id')
 head(used2)
@@ -127,29 +132,25 @@ used.df$merge_id <- NULL
 # check for duplicates
 length(unique(used.df$uid)) == nrow(used.df)
 
-##### Adjust ag edge #####
-used.df$dist2agedge <- ifelse(used.df$lc.estes == 1, -(used.df$dist2agedge), used.df$dist2agedge)
-used.df$dist2paedge <- ifelse(used.df$pa == 1, -(used.df$dist2paedge), used.df$dist2paedge)
-
-summary(used.df$dist2agedge)
-summary(used.df$dist2paedge)
-
-# check for duplicates
-length(unique(used.df$uid)) == nrow(used.df)
-
 ##### Add Forest Proximity Index #####
 ## Pre-computed 
 
 # read in results - tagged by uid
-# prox.index.250 <- read.csv('spatial data/Forest_hansen/distanceloop/output/proximity_index_table_250.csv') %>%
-#   select(prox.index.250 = prox.index, prox.index.mean, uid)
-# 
-# used.df <- merge(used.df, prox.index.250, 'uid', all.x = TRUE)
-# summary(used.df$prox.index.250)
+setwd('./spatial data/Forest_hansen/distanceloop/output')
+prox.index.1000 <- list.files(pattern = "1000.RDS") %>%
+  map_dfr(readRDS) %>%
+  dplyr::select(prox.index.1000 = prox.index, uid = point.id) %>%
+  group_by(uid) %>%
+  summarise(prox.index.1000 = mean(prox.index.1000))
 
+head(prox.index.1000)
 
-##### Save output #####
-write.csv(used.df, './Staging Areas/movdata/movdat_004_lsdv.csv')
+used.df <- merge(used.df, prox.index.1000, 'uid', all.x = TRUE)
+
+# check for duplicates
+length(unique(used.df$uid)) == nrow(used.df)
+
+setwd("/Users/nhahn/Dropbox/CSU/GME_Movement")
 
 
 ##### Define Seasons #####
@@ -158,6 +159,7 @@ write.csv(used.df, './Staging Areas/movdata/movdat_004_lsdv.csv')
 seasons <- read.csv('./spatial data/season_time_windows_wetdrytrans_20112021.csv')
 seasons$start <- ymd_hms(seasons$start)
 seasons$end <- ymd_hms(seasons$end)
+used.df$date <- ymd_hms(used.df$date)
 
 # cut the dataframe by the start date of each season and label it with season name. 
 # NOTE: switch the label to `unique_season` to check that season dates and labels are matching correctly for your dataset
@@ -169,6 +171,13 @@ levels(rng.name)
 # create variables
 used.df$season <- rng.name
 
+# check for duplicates
+length(unique(used.df$uid)) == nrow(used.df)
+
+##### Save output #####
+write.csv(used.df, './Staging Areas/movdata/movdat_004_lsdv_20220109.csv')
+
+
 ###########################################################################################################
 ## ///////////////////////////////////////// Model Fitting ///////////////////////////////////////////// ##
 ###########################################################################################################
@@ -176,26 +185,21 @@ used.df$season <- rng.name
 #### Model Fitting ####
 
 ##### Read in data #####
-used.df <- as.data.frame(data.table::fread('./Staging Areas/movdata/movdat_004_lsdv.csv'))
-used.df$V1 <- NULL
+# used.df <- as.data.frame(data.table::fread('./Staging Areas/movdata/movdat_004_lsdv.csv'))
+# used.df$V1 <- NULL
 
 ## **remove relocations within ag**
 ds.st.sub <- used.df %>%
-  filter(lubridate::hour(date) %in% c(6:18)) #%>%
-  #filter(dist2ag > 0)
+  #filter(lubridate::hour(date) %in% c(6:18)) #%>%
+  filter(dist2ag > 0)
 
 # check for duplicates
 length(unique(ds.st.sub$uid)) == nrow(ds.st.sub)
 
-## Load proximity index 
-prox.index <- read.csv('spatial data/Forest_hansen/distanceloop/output/proximity_index_table_250.csv')
-ds.st.sub <- merge(ds.st.sub, prox.index, c('uid', 'x', 'y'), all.x = T)
-
-# update with search radius
-names(ds.st.sub)[names(ds.st.sub) == 'prox.index'] <- 'prox.index.250'
-
 ## adjust proximity index values
-ds.st.sub$prox.index.250 <- ifelse(is.na(ds.st.sub$prox.index.250), 0.00001, ds.st.sub$prox.index.250)
+ds.st.sub$prox.index.1000 <- ifelse(is.na(ds.st.sub$prox.index.1000), 0.00001, ds.st.sub$prox.index.1000)
+
+
 
 # ds.st.sub$prox.norm = (ds.st.sub$prox.index.250 - min(ds.st.sub$prox.index.250)) / (max(ds.st.sub$prox.index.250) - min(ds.st.sub$prox.index.250))
 # 
@@ -207,8 +211,8 @@ ds.st.sub$prox.index.250 <- ifelse(is.na(ds.st.sub$prox.index.250), 0.00001, ds.
 ## standardize covs
 covariates <- c("dist2ag", "dist2agedge", "dist2water", 'slope', 'dist2forest', 'dist2paedge')
 ds.st.sub <- ds.st.sub %>%
-  dplyr::select(uid, subject_name, burst, x, y, date, vote, all_of(covariates), drains1000, gHM, prop.ag.250, prop.ag.1500,
-                prop.forest.250, prop.forest.1500, prop.settlement.250, prop.settlement.1500, prox.index.250, pa, season) %>%
+  dplyr::select(uid, subject_name, burst, x, y, date, vote.ag, all_of(covariates), drains1000, gHM, prop.ag.250, prop.ag.1500,
+                prop.forest.250, prop.forest.1500, prop.settlement.250, prop.settlement.1500, prox.index.1000, pa, season) %>%
   mutate(forest = if_else(dist2forest == 0, 1, 0)) %>%
   mutate_at(covariates, .funs = scale) %>%
   mutate(drains1000 = as.factor(drains1000)) %>%
@@ -244,7 +248,7 @@ mod.for.dist <- glmer(vote ~ dist2forest + (1|subject_name),
 AICc(mod.for.step, mod.for.daily, mod.for.dist) # forest step scale is better by AICc
 
 # check proximity index
-mod.prox.250 <- glmer(vote ~ log(prox.index.250) + (1|subject_name),
+mod.prox.1000 <- glmer(vote.ag ~ log(prox.index.1000) + (1|subject_name),
                       data = ds.st.sub, family = binomial)
 
 
@@ -254,37 +258,37 @@ t <- lm(log(prox.index.250) ~ prop.forest.250, data = ds.st.sub)
 ##### Fit candidate models #####
 
 ## Global model
-mod.global.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + pa + season + (1|subject_name), 
+mod.global.sub <- glmer(vote.ag ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + season + (1|subject_name), 
                     data = ds.st.sub, family = binomial)
 
 ## Human footprint model
-mod.hm.sub <- glmer(vote ~ prop.ag.1500 + gHM + pa + (1|subject_name),
+mod.hm.sub <- glmer(vote.ag ~ prop.ag.1500 + gHM + dist2paedge + (1|subject_name),
                 data = ds.st.sub, family = binomial)
 
 ## Natural features model
-mod.nat.sub <- glmer(vote ~ prop.forest.250 + drains1000 + slope + (1|subject_name),
+mod.nat.sub <- glmer(vote.ag ~ prop.forest.250 + drains1000 + slope + (1|subject_name),
                  data = ds.st.sub, family = binomial)
 
 ## Strongest predictors
-mod.str.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + gHM + (1|subject_name),
+mod.str.sub <- glmer(vote.ag ~ prop.ag.1500 + prop.forest.250 + gHM + (1|subject_name),
                      data = ds.st.sub, family = binomial)
 
-mod.str2.sub <- glmer(vote ~ prop.ag.1500 + prop.forest.250 + (1|subject_name),
+mod.str2.sub <- glmer(vote.ag ~ prop.ag.1500 + prop.forest.250 + (1|subject_name),
                      data = ds.st.sub, family = binomial)
 
-mod.str3.sub <- glmer(vote ~ gHM + (1|subject_name),
+mod.str3.sub <- glmer(vote.ag ~ gHM + (1|subject_name),
                                     data = ds.st.sub, family = binomial)
 
-mod.str4.sub <- glmer(vote ~ gHM*prop.forest.250 + (1|subject_name),
+mod.str4.sub <- glmer(vote.ag ~ gHM*prop.forest.250 + (1|subject_name),
                       data = ds.st.sub, family = binomial)
 
-mod.global.interaction <- glmer(vote ~ prop.ag.1500 + gHM*prop.forest.250 + log(prox.index.250) + drains1000 + slope + pa + (1|subject_name), 
+mod.global.interaction <- glmer(vote.ag ~ prop.ag.1500 + gHM*prop.forest.250 + drains1000 + slope + pa + (1|subject_name), 
                           data = ds.st.sub, family = binomial)
 
-AICc(mod.global.sub, mod.hm.sub, mod.nat.sub, mod.str.sub, mod.str2.sub, mod.str3.sub, mod.str4.sub, mod.global.interaction)
+t <- AICc(mod.global.sub, mod.hm.sub, mod.nat.sub, mod.str.sub, mod.str2.sub, mod.str3.sub, mod.str4.sub, mod.global.interaction)
 
-summary(mod.global.interaction)
-sjPlot::plot_model(mod.global.interaction)
+summary(mod.global.sub)
+sjPlot::plot_model(mod.global.sub)
 
 #### Grid-Based Model Fitting ####
 
