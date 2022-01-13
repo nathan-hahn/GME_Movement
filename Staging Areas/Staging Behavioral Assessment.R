@@ -5,20 +5,25 @@ library(lubridate)
 Sys.setenv(TZ='Africa/Nairobi')
 
 ## Load the data
-gme.stage <- as.data.frame(data.table::fread('./movdata/GMEcollars_004_stageclassified_20211019.csv', tz=''))
+#gme.stage <- as.data.frame(data.table::fread('./movdata/GMEcollars_004_stageclassified_20211019.csv', tz=''))
+gme.stage <- as.data.frame(data.table::fread('./Staging Areas/movdata/GMEcollars_004_stageclassified_20220109.csv', tz=''))
+
 
 gme.stage <- gme.stage %>%
   dplyr::select(uid, subject_name, year.cuts, tactic.season, tactic.agg, x, y, date, dist, id, subject_sex, region, 
-                subject_ageClass, ag.used, viterbi, ag.window, dayBurst, ag.window.ext, vote)
+                subject_ageClass, ag.used, viterbi, ag.window, dayBurst, ag.window.ext, vote.ag, site, pa)
 
 head(gme.stage)
+
+# correct pardamat ag to non-ag
+gme.stage$ag.used <- ifelse(gme.stage$site == 'mep' & gme.stage$pa == 2, 0, gme.stage$ag.used)
 
 #' ##### Staging Area Data Summaries
 
 #' Check the hourly distribution of staging relocations
 
 # check distribution of stage relocs over the course of the day
-t <- filter(gme.stage, vote == 1) %>%
+t <- filter(gme.stage, vote.ag == 1) %>%
   group_by(hour(date)) %>% tally()
 ggplot(t, aes(as.factor(`hour(date)`), n)) + geom_bar(stat = 'identity') +
   xlab('hour of day') + ylab('n stage relocations')
@@ -42,17 +47,20 @@ length(unique(gme.stage$stage.event.index))
 
 # summarise overall % staging distribution
 stage.summary <- gme.stage %>%
-  group_by(subject_name) %>%
+  group_by(subject_name, subject_sex) %>%
   summarise(n.stage = length(unique(stage.event.index)),
             n.raid = length(unique(ag.day.index)),
             pct.stage = n.stage/n.raid) 
 
 summary(stage.summary$pct.stage)
+tapply(stage.summary$pct.stage,stage.summary$subject_sex, summary)
+
+hist(stage.summary$pct.stage, xlab = 'staging percentage (individual years)', main = 'Distribution of staging percentage')
 
 #' What is the distribution of staging lengths? Is capped at 12 hrs by parameter space
 
 length <- gme.stage %>%
-  filter(vote == 1) %>%
+  filter(vote.ag == 1) %>%
   group_by(stage.event.index) %>%
   tally()
 
@@ -75,6 +83,8 @@ stage.summary <- gme.stage %>%
 
 boxplot(stage.summary$pct.stage ~ stage.summary$tactic.season,
         xlab = 'Tactics (Rare to Habitual)', ylab = 'Pct. of Raids with a Stage')
+
+
 
 #' Summarise inter-annual variation in staging by individuals - coefficient of variation
 
@@ -99,7 +109,7 @@ eventIndex <- gme.stage %>%
                                                       values[values] <- seq_along(values[values])))) %>%
   # create unique index by pasting the event number and individual id
   mutate(eventIndex = paste(id, eventIndex, sep = '-')) %>%
-  select(id, ag.window.ext, eventFlag, eventIndex)
+  dplyr::select(id, ag.window.ext, eventFlag, eventIndex)
 
 # assign event index
 gme.stage$ag.window.ext.index <- eventIndex$eventIndex
@@ -301,36 +311,30 @@ mod.7.bi <- glmer(pct.stage ~ log(mu.dailyDist) + (1|subject_name),
                   family = binomial)
 
 library(MuMIn)
-# # AICc
-# t <- as.data.frame(AICc(mod.global.bi, mod.1.bi, mod.2.bi, mod.3.bi, mod.4.bi, mod.5.bi, mod.6.bi, mod.7.bi))
-# t$deltaAICc <- qpcR::akaike.weights(t$AICc)$deltaAIC
-# t$AICc_weight <- round(qpcR::akaike.weights(t$AICc)$weights, 2)
-# t$model_likelihood <- round(qpcR::akaike.weights(t$AICc)$rel.LL, 2)
-# t$loglik <- c(logLik(mod.global.bi), logLik(mod.1.bi), logLik(mod.2.bi), logLik(mod.3.bi), logLik(mod.4.bi), logLik(mod.5.bi), logLik(mod.6.bi), logLik(mod.7.bi))
-# t$mod.formula <- c(mod.global.bi@call$formula, mod.1.bi@call$formula, mod.2.bi@call$formula, mod.3.bi@call$formula, mod.4.bi@call$formula, 
-#  mod.5.bi@call$formula, mod.6.bi@call$formula, mod.7.bi@call$formula)
-# t <- t[order(t$AICc),]
-# t
-# 
-# View(t)
+## NOTE: global model and mod.4 failed to converge for the binomial weighted models. Removed from model table calculations
 
 # AICc
-t <- as.data.frame(AICc(mod.1.bi, mod.2.bi, mod.3.bi, mod.4.bi, mod.5.bi, mod.6.bi, mod.7.bi))
+t <- as.data.frame(AICc(mod.1.bi, mod.2.bi, mod.3.bi, mod.5.bi, mod.6.bi, mod.7.bi))
 t$deltaAICc <- qpcR::akaike.weights(t$AICc)$deltaAIC
 t$AICc_weight <- round(qpcR::akaike.weights(t$AICc)$weights, 2)
 t$model_likelihood <- round(qpcR::akaike.weights(t$AICc)$rel.LL, 2)
-t$loglik <- c(logLik(mod.1.bi), logLik(mod.2.bi), logLik(mod.3.bi), logLik(mod.4.bi), logLik(mod.5.bi), logLik(mod.6.bi), logLik(mod.7.bi))
-t$mod.formula <- c(mod.1.bi@call$formula, mod.2.bi@call$formula, mod.3.bi@call$formula, mod.4.bi@call$formula, 
+t$loglik <- c(logLik(mod.1.bi), logLik(mod.2.bi), logLik(mod.3.bi), logLik(mod.5.bi), logLik(mod.6.bi), logLik(mod.7.bi))
+t$mod.formula <- c(mod.1.bi@call$formula, mod.2.bi@call$formula, mod.3.bi@call$formula, 
                    mod.5.bi@call$formula, mod.6.bi@call$formula, mod.7.bi@call$formula)
 t <- t[order(t$AICc),]
 t
 
 View(t)
 
+# summary 
+summary(mod.6.bi)
+
+sjPlot::plot_model(mod.6.bi)
+
 
 # Final table
 t$mod.formula <- as.character(t$mod.formula)
-write.csv(t, './Staging Areas/stage_behavior_modtable_binomialadjust.csv')
+write.csv(t, './Staging Areas/stage_behavior_modtable_binomialadjust_20220109.csv')
 
 
 #### TODO Add Model Selection Based on Many Competing Models ####
