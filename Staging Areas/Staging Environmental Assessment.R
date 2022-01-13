@@ -184,7 +184,7 @@ write.csv(used.df, './Staging Areas/movdata/movdat_004_lsdv_20220109.csv')
 
 #### Model Fitting ####
 
-##### Read in data #####
+##### Create Model Dataframe #####
 # used.df <- as.data.frame(data.table::fread('./Staging Areas/movdata/movdat_004_lsdv.csv'))
 # used.df$V1 <- NULL
 
@@ -199,15 +199,6 @@ length(unique(ds.st.sub$uid)) == nrow(ds.st.sub)
 ## adjust proximity index values
 ds.st.sub$prox.index.1000 <- ifelse(is.na(ds.st.sub$prox.index.1000), 0.00001, ds.st.sub$prox.index.1000)
 
-
-
-# ds.st.sub$prox.norm = (ds.st.sub$prox.index.250 - min(ds.st.sub$prox.index.250)) / (max(ds.st.sub$prox.index.250) - min(ds.st.sub$prox.index.250))
-# 
-# ds.st.sub %>% group_by(vote) %>% summarise(mean = mean(prox.index.250),
-#                                            mean.norm = mean(prox.norm),
-#                                            mean.scale = mean(scale(prox.index.250)),
-#                                            mean.log = mean(log(prox.index.250)))
-
 ## standardize covs
 covariates <- c("dist2ag", "dist2agedge", "dist2water", 'slope', 'dist2forest', 'dist2paedge')
 ds.st.sub <- ds.st.sub %>%
@@ -217,7 +208,6 @@ ds.st.sub <- ds.st.sub %>%
   mutate_at(covariates, .funs = scale) %>%
   mutate(drains1000 = as.factor(drains1000)) %>%
   mutate(pa = as.factor(pa)) %>%
-  #mutate(prox.index.250 = log(prox.index.250)) %>%
   droplevels()
 
 # season dummy
@@ -300,8 +290,8 @@ locs <- used.df %>%
   st_as_sf(coords = c('x','y'), crs = 32736) %>%
   terra::vect()
 # split into stage/no.stage dataframes
-locs.stage <- locs[locs$vote == 1,]
-locs.nostage <- locs[locs$vote == 0,]
+locs.stage <- locs[locs$vote.ag == 1,]
+locs.nostage <- locs[locs$vote.ag == 0,]
 
 # reference raster - 250m or 1000m
 r <- terra::rast(locs, extent = ext(gHM), resolution = 250)
@@ -334,52 +324,65 @@ occ.weights <- rast(occ.weights)
 plot(occ.weights)
 
 # check results
-gme <- sf::st_read('~/Dropbox (Personal)/CSU/GME_Movement/spatial data/GSE/GSE_2020.shp')
-YlOrRd <- RColorBrewer::brewer.pal(9, 'YlOrRd')
+gme <- sf::st_read('./spatial data/GSE/GSE_2020.shp')
+getwYlOrRd <- RColorBrewer::brewer.pal(9, 'YlOrRd')
 library(mapview)
-mapview(gme, zcol = 'pa_status', col.regions = RColorBrewer::brewer.pal(3, 'Greens')) + 
+mapview(gme, zcol = 'pa_status', col.regions = RColorBrewer::brewer.pal(3, 'Greens'), alpha = 0.3) + 
   mapview(raster::raster(r.nostage), col.regions = YlOrRd, layer.name = 'non-staging relocations count') + 
   mapview(raster::raster(r.stage), col.regions = YlOrRd, layer.name = 'staging relocations count') + 
   mapview(raster::raster(rel.staging.occ), col.regions = YlOrRd, layer.name = 'relative density of staging')
 
-# check with staging relocs
-mapview(rel.staging.occ, col.regions = YlOrRd, layer.name = 'relative density of staging', alpha = 0.6) 
-  #mapview(st_as_sf(used.df[used.df$vote == 1,], coords = c('x','y'), crs = 32736), col.region = 'red', cex = 1.5, layer.name = 'staging relocs')
+## save the output
+terra::writeRaster(rel.staging.occ, './Staging Areas/staging_reldensity_250m_20220109.tif', overwrite = T) 
 
-## save the output -- check resolution size
-terra::writeRaster(rel.staging.occ, './Staging Areas/staging_reldensity_250m.tif', overwrite = T) 
-
-## relative density of staging to non-staging
+## map of relative density of staging to non-staging
 library(tmap)
 gme <- sf::st_read('~/Dropbox (Personal)/CSU/GME_Movement/spatial data/GSE/GSE_2020.shp')
-dens.r <- raster::raster('./Staging Areas/staging_reldensity_250m.tif')
-rel.staging.occ <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'serengeti-mara') +
+dens.r <- raster::raster('./Staging Areas/staging_reldensity_250m_20220109.tif')
+rel.staging.map <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'serengeti-mara') +
   tm_shape(dens.r, raster.downsample = FALSE) + tm_raster(palette = RColorBrewer::brewer.pal(5, 'YlOrRd'), title = 'Relative Staging Occurance')
-rel.staging.occ
+rel.staging.map
 
-tmap_save(rel.staging.occ, "Rel Staging Map.png", dpi = 300)
+tmap_save(rel.staging.map, "Rel Staging Map 20220109.png", dpi = 300)
+
+## map of staging and ag-use relocs
+# define staging and ag-day reloc datasets
+stage.relocs <- filter(gme.stage, vote.ag == 1) %>%
+  st_as_sf(coords = c('x','y'), crs = 32736)
+ag.relocs <- gme.stage %>% 
+  filter(vote.ag == 0 & ag.window.ext == 1) %>%
+  st_as_sf(coords = c('x','y'), crs = 32736) 
+
+# tmap
+stage.points <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'protected areas') +
+  tm_shape(ag.relocs) + tm_dots(size = 0.01, alpha = 0.03, col = '#FEE0D2') + 
+  tm_shape(stage.relocs) + tm_dots(size = 0.01, alpha = 0.02, col = '#DE2D26', title = 'staging relocs') + 
+  # add manual legend for tm_dot layers
+  tm_add_legend(title = 'staging relocs', type = 'symbol', labels = c('ag day relocs', 'staging relocs'), col = c('#FEE0D2', '#DE2D26')) +
+  # add map title
+  tm_layout(title = 'Staging Relocations')
+stage.points
+
+tmap_save(stage.points, "Staging Relocs Map 20220109.png", dpi = 300)
 
 
 
-##### Extract Relative Staging Occurrence #####
+
+##### Create Model Dataframe #####
 #' Extract staging occurrence cell values for each relocation
 #' Filter to relocations of interest (staging relocs and non-staging relocs within ag days and not in ag)
 
-# create spatial dataframe
+# make spatial dataframe
 study.area <- 32736
 locs.sf <- st_as_sf(ds.st.sub, coords = c('x','y'), crs = study.area)
 locs <- locs.sf %>% terra::vect()
 
-# extract to new column
-#rel.staging.occ <- terra::rast('./Staging Areas/staging_reldensity_1000m.tif')
-#occ.weights <- terra::rast('...')
+# extract rel staging values and weights to new columns
 ds.st.sub$rel.staging.occ <- terra::extract(rel.staging.occ, locs)[,2]
 ds.st.sub$occ.weights <- terra::extract(occ.weights, locs)[,2]
 ds.st.sub <- ds.st.sub[!is.na(ds.st.sub$rel.staging.occ),]
 summary(ds.st.sub$rel.staging.occ)
 summary(ds.st.sub$occ.weights)
-
-#ds.st.sub$occ.weights <- (ds.st.sub$occ.weights-min(ds.st.sub$occ.weights))/(max(ds.st.sub$occ.weights)-min(ds.st.sub$occ.weights))
 
 hist(ds.st.sub$rel.staging.occ)
 
@@ -399,24 +402,21 @@ FittedModel <- fit.variogram(t.var, model=TheVariogramModel)
 plot(t.var, model=FittedModel)
 
 
-##### Fit Regression Model #####
+##### Fit candidate models #####
 
-mod.global.sub.1000 <- glmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + pa + (1|subject_name), 
+mod.global.sub.1000 <- glmer(rel.staging.occ ~ dist2ag + prop.forest.250 + drains1000 + slope + gHM + pa + season + 
+                               (1|subject_name), 
                             weights = log(occ.weights), # weights supplied as total counts that proportions arise from
                             data = ds.st.sub,
                             family = binomial)
 summary(mod.global.sub.1000)
-
-mod.global.sub.250.int <- glmer(rel.staging.occ ~ prop.ag.1500 + gHM*prop.forest.250 + drains1000 + slope + pa + (1|subject_name), 
-                             weights = log(occ.weights), # weights supplied as total counts that proportions arise from
-                             data = ds.st.sub,
-                             family = binomial)
-summary(mod.global.sub.250.int)
 
 
 sjPlot::plot_models(mod.global.sub.1000, mod.global.sub.250)
 
 plot(mod.global.sub.1000)
 plot(mod.global.sub.1000.xy)
+
+
 
 
