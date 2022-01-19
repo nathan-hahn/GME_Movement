@@ -45,7 +45,8 @@ result.df <- result.df %>%
 
 #### Plot Loop Results ####
 
-plot.df <- filter(result.df, ag.window.ext == 1)
+plot.df <- filter(result.df, ag.window.ext == 1) # filter out repeats for non-ag windows
+dim(plot.df) # number of permutations 
 
 ggplot(plot.df, aes(x = pct.seq, y = (1-n.stage.err), group = as.factor(win.start))) +
   geom_line(aes(color = as.factor(win.start))) +
@@ -163,10 +164,9 @@ end - start
 
 
 # for updated ag mask - removal of algorithms <50% accurate
-saveRDS(sums.all, 'Staging Areas/pct loop tests/hmm_ensemble_sums.all_mask_20220109.RDS')
-saveRDS(sums, 'Staging Areas/pct loop tests/hmm_ensemble_sums_mask_20220109.RDS')
-#sums.all <- readRDS('Staging Areas/pct loop tests/hmm_ensemble_sums.all_mask_20220105.RDS')
-#sums <- readRDS('Staging Areas/pct loop tests/hmm_ensemble_sums_mask_20220105.RDS')
+#saveRDS(sums.all, 'Staging Areas/pct loop tests/hmm_ensemble_sums.all_mask_20220109.RDS')
+#saveRDS(sums, 'Staging Areas/pct loop tests/hmm_ensemble_sums_mask_20220109.RDS')
+sums.all <- readRDS('Staging Areas/pct loop tests/hmm_ensemble_sums.all_mask_20220109.RDS')
 
 #' The resulting dataframe has a column for each model (xx) and each row corresponds
 #' to a GPS relocation. If a stage is detected for a given model, the vote value 
@@ -214,11 +214,13 @@ table
 
 # check omission error rate
 gme %>% ungroup() %>% filter(ag.window.ext == 1) %>% summarise(n.agdays = length(unique(ag.window.index)), 
-                                                                     n.stage = length(unique(stage.event.index)))
+                                                               n.stage = length(unique(stage.event.index)),
+                                                               omission = n.stage/n.agdays )
 
 
-##### Adjust for Ag Spatial Threshold #####
+##### Adjust Using Spatial Threshold Filter #####
 gme$vote.thresh <- ifelse(gme$dist2ag <= 3500, gme$vote, 0)
+gme$vote.thresh <- ifelse(gme$dist2forest <= 1200, gme$vote, 0)
 
 ## index staging events
 gme$stage.event.index <- ifelse(gme$vote.thresh == 1, gme$dayBurst, 0)
@@ -236,13 +238,14 @@ table
 
 # spatial threshold - check omission error rate
 gme %>% ungroup() %>% filter(ag.window.ext == 1) %>% summarise(n.agdays = length(unique(ag.window.index)), 
-                                                                                n.stage = length(unique(stage.event.index)))
+                                                               n.stage = length(unique(stage.event.index)),
+                                                               omission = n.stage/n.agdays )
 
 
 ##### Create stage-tagged dataset #####
 # results of ag-only ensemble model (does not include non-ag stages)
-sums.ag <- readRDS('Staging Areas/pct loop tests/hmm_ensemble_sums_mask_20220105.RDS')
-df.weight <- as.data.frame(do.call(cbind, sums))
+sums.ag <- readRDS('Staging Areas/pct loop tests/hmm_ensemble_sums_mask_20220109.RDS')
+df.weight <- as.data.frame(do.call(cbind, sums.ag))
 # tally weighted votes - sum of sums
 df.weight$stagesum <- rowSums(df.weight, na.rm = T)
 # get mean vote value for majority voting

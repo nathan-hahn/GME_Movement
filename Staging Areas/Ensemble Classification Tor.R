@@ -69,7 +69,6 @@ boxplot((1-plot.df$n.stage.err) ~ plot.df$win.end, xlab = 'window end time', yla
 ##### Import dataset #####
 
 # import dataset
-#gme <- as.data.frame(data.table::fread('~/Dropbox/CSU/GME_Movement/Staging Areas/GMEcollars_004_HMMclassified_stage_20201012.csv'))
 gme <- readRDS('./Staging Areas/nsd loop tests/tor.3.w2.filter.RDS')
 
 ## assign unique id to each ag window event
@@ -95,6 +94,7 @@ plot.df$n.stage.acc <- 1-plot.df$n.stage.err # accuracy = 1-error
 # restrict candidate model set for speed and to exclude irrelevant models with low accuracy.
 # 150 cutoff is based on the ggplot of accuracy by nsd sequence. Appears that models stabalize around 150 net displacement. Removing these avoids artificially inflating model voting scores
 plot.df <- filter(plot.df, n.stage.acc >= 0.5)
+dim(plot.df) # unique permutations
 
 # create new dataframe
 gme.stage <- gme
@@ -212,25 +212,23 @@ gme.stage %>% ungroup() %>% filter(ag.window.ext == 1) %>% summarise(n.agdays = 
                                                                      n.stage = length(unique(stage.event.index)),
                                                                      omission = 1 - n.stage/n.agdays )
 
-##### Adjust for Ag Spatial Threshold #####
+##### Adjust Using Spatial Threshold Filter #####
 
 # Add dist2ag 
 locs <- sf::st_as_sf(gme.stage, coords = c('x','y'), crs = 32736) %>%
   terra::vect()
 dist2ag <- terra::rast('./spatial data/dist2ag_estes_32736_2019-11-21.tif')
+dist2forest <- terra::rast('./spatial data/dist2forest_hansen_cover60_32736_30.tif')
 
 gme.stage$dist2ag <- terra::extract(dist2ag, locs)[,2]
+gme.stage$dist2forest <- terra::extract(dist2forest, locs)[,2]
 
 # Define spatial threshold
-w = 3500
-gme.stage$vote.thresh <- ifelse(gme.stage$dist2ag <= w, gme.stage$vote, 0)
+#gme.stage$vote.thresh <- ifelse(gme.stage$dist2ag <= 3500, gme.stage$vote, 0)
+gme.stage$vote.thresh <- ifelse(gme.stage$dist2forest <= 1200, gme.stage$vote, 0)
 
 ## index staging events
-eventFlag <- ifelse(gme.stage$vote.thresh == 1, TRUE, FALSE)
-eventIndex <- inverse.rle(within.list(rle(eventFlag), 
-                                      values[values] <- seq_along(values[values])))
-# assign a unique event index for each stage event
-gme.stage$stage.event.index <- eventIndex
+gme.stage$stage.event.index <- ifelse(gme.stage$vote.thresh == 1, gme.stage$dayBurst, 0)
 
 table <- gme.stage %>% group_by(ag.window.ext) %>%
   summarise(n.stage = length(unique(stage.event.index)), 
@@ -242,11 +240,10 @@ table <- table %>%
   mutate(n.stage.acc = 1-n.stage.err)
 table
 
-
 # spatial threshold - check omission error rate
 gme.stage %>% ungroup() %>% filter(ag.window.ext == 1) %>% summarise(n.agdays = length(unique(ag.window.index)), 
-                                                                     n.stage = length(unique(stage.event.index)),
-                                                                     omission = 1 - n.stage/n.agdays )
+                                                               n.stage = length(unique(stage.event.index)),
+                                                               omission = 1-n.stage/n.agdays )
 
 
 ##### Create stage-tagged dataset #####
