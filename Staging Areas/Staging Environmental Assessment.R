@@ -69,7 +69,7 @@ drains <- st_read("./spatial data/drains/drains_estes_20211117/drains_estes_-202
   filter(RIV_ORD <= 7)
   
 # buffer by 1000m
-drains.1000 <- st_buffer(drains, dist = 250) %>%
+drains <- st_buffer(drains, dist = 250) %>%
   st_union() 
 #plot(drains.1000)
 
@@ -88,7 +88,7 @@ system.time({
 used[,2] <- terra::extract(dist2ag, locs)[,2]
 used[,3] <- terra::extract(dist2agedge, locs)[,2]
 used[,4] <- terra::extract(dist2water, locs)[,2]
-used[,5] <- as.numeric(st_intersects(locs.sf, drains.1000)) # point to polygon
+used[,5] <- as.numeric(st_intersects(locs.sf, drains)) # point to polygon
 used[,5][is.na(used[,5])] <- 0 # convert NAs to 0's
 used[,6] <- terra::extract(slope, locs)[,2]
 used[,7] <- terra::extract(gHM, locs)[,2]
@@ -113,7 +113,7 @@ summary(used)
 mode(used) = "numeric"
 used2 <- as.data.frame(used)
 used2$uid <- as.numeric(locs.sf$uid)
-colnames(used2) <- c("used","dist2ag", "dist2agedge", "dist2water", 'drains.1000', 'slope', 'gHM', 'pa', 'lc', 'dist2forest', 
+colnames(used2) <- c("used","dist2ag", "dist2agedge", "dist2water", 'drains250', 'slope', 'gHM', 'pa', 'lc', 'dist2forest', 
                      'prop.ag.250', 'prop.ag.1500', 'prop.forest.250', 'prop.forest.1500', 'dist2paedge', 'prop.settlement.250', 
                      'prop.settlement.1500', 'merge_id')
 head(used2)
@@ -185,8 +185,8 @@ write.csv(used.df, './Staging Areas/movdata/movdat_004_lsdv_20220109.csv')
 #### Model Fitting ####
 
 ##### Create Model Dataframe #####
-# used.df <- as.data.frame(data.table::fread('./Staging Areas/movdata/movdat_004_lsdv.csv'))
-# used.df$V1 <- NULL
+used.df <- as.data.frame(data.table::fread('./Staging Areas/movdata/movdat_004_lsdv_20220109.csv'))
+used.df$V1 <- NULL
 
 ## **remove relocations within ag**
 ds.st.sub <- used.df %>%
@@ -202,11 +202,11 @@ ds.st.sub$prox.index.1000 <- ifelse(is.na(ds.st.sub$prox.index.1000), 0.00001, d
 ## standardize covs
 covariates <- c("dist2ag", "dist2agedge", "dist2water", 'slope', 'dist2forest', 'dist2paedge')
 ds.st.sub <- ds.st.sub %>%
-  dplyr::select(uid, subject_name, burst, x, y, date, vote.ag, all_of(covariates), drains1000, gHM, prop.ag.250, prop.ag.1500,
+  dplyr::select(uid, subject_name, burst, x, y, date, vote.ag, all_of(covariates), drains250, gHM, prop.ag.250, prop.ag.1500,
                 prop.forest.250, prop.forest.1500, prop.settlement.250, prop.settlement.1500, prox.index.1000, pa, season) %>%
   mutate(forest = if_else(dist2forest == 0, 1, 0)) %>%
   mutate_at(covariates, .funs = scale) %>%
-  mutate(drains1000 = as.factor(drains1000)) %>%
+  mutate(drains250 = as.factor(drains250)) %>%
   mutate(pa = as.factor(pa)) %>%
   droplevels()
 
@@ -248,7 +248,7 @@ t <- lm(log(prox.index.250) ~ prop.forest.250, data = ds.st.sub)
 ##### Fit candidate models #####
 
 ## Global model
-mod.global.sub <- glmer(vote.ag ~ prop.ag.1500 + prop.forest.250 + drains1000 + slope + gHM + dist2paedge + season + (1|subject_name), 
+mod.global.sub <- glmer(vote.ag ~ prop.ag.1500 + prop.forest.250 + drains250 + slope + gHM + dist2paedge + season + (1|subject_name), 
                     data = ds.st.sub, family = binomial)
 
 ## Human footprint model
@@ -256,7 +256,7 @@ mod.hm.sub <- glmer(vote.ag ~ prop.ag.1500 + gHM + dist2paedge + (1|subject_name
                 data = ds.st.sub, family = binomial)
 
 ## Natural features model
-mod.nat.sub <- glmer(vote.ag ~ prop.forest.250 + drains1000 + slope + (1|subject_name),
+mod.nat.sub <- glmer(vote.ag ~ prop.forest.250 + drains250 + slope + (1|subject_name),
                  data = ds.st.sub, family = binomial)
 
 ## Strongest predictors
@@ -272,7 +272,7 @@ mod.str3.sub <- glmer(vote.ag ~ gHM + (1|subject_name),
 mod.str4.sub <- glmer(vote.ag ~ gHM*prop.forest.250 + (1|subject_name),
                       data = ds.st.sub, family = binomial)
 
-mod.global.interaction <- glmer(vote.ag ~ prop.ag.1500 + gHM*prop.forest.250 + drains1000 + slope + pa + (1|subject_name), 
+mod.global.interaction <- glmer(vote.ag ~ prop.ag.1500 + gHM*prop.forest.250 + drains250 + slope + pa + (1|subject_name), 
                           data = ds.st.sub, family = binomial)
 
 t <- AICc(mod.global.sub, mod.hm.sub, mod.nat.sub, mod.str.sub, mod.str2.sub, mod.str3.sub, mod.str4.sub, mod.global.interaction)
@@ -404,7 +404,7 @@ plot(t.var, model=FittedModel)
 
 ##### Fit candidate models #####
 
-mod.global.sub.1000 <- glmer(rel.staging.occ ~ dist2ag + prop.forest.250 + drains1000 + slope + gHM + pa + season + 
+mod.global.sub.1000 <- glmer(rel.staging.occ ~ dist2ag + prop.forest.250 + drains250 + slope + gHM + pa + season + 
                                (1|subject_name), 
                             weights = log(occ.weights), # weights supplied as total counts that proportions arise from
                             data = ds.st.sub,
