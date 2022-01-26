@@ -57,7 +57,7 @@ prop.settlement.250 <- rast("spatial data/estes_settlement_pct_250.tif")
 prop.settlement.1500 <- rast("spatial data/estes_settlement_pct_1500.tif")
 dist2paedge <- rast("./spatial data/dist2paedge_estes_32736_20211118.tif")
 
-pa <- rast("./spatial data/GSEr_dissolved_estes_32736_20211118.tif") # binary protection status dissolved (0/1)
+pa <- rast("./spatial data/GSEr_dissolved_estes_32736_20220120.tif") # 3 - PA, 2 - cc
 pa <- terra::classify(pa, cbind(NA, 0)) # set no data to 'not protected' (0)
 plot(pa)
 
@@ -185,8 +185,8 @@ write.csv(used.df, './Staging Areas/movdata/movdat_004_lsdv_20220109.csv')
 #### Model Fitting ####
 
 ##### Create Model Dataframe #####
-used.df <- as.data.frame(data.table::fread('./Staging Areas/movdata/movdat_004_lsdv_20220109.csv'))
-used.df$V1 <- NULL
+# used.df <- as.data.frame(data.table::fread('./Staging Areas/movdata/movdat_004_lsdv_20220109.csv'))
+# used.df$V1 <- NULL
 
 ## **remove relocations within ag**
 ds.st.sub <- used.df %>%
@@ -207,19 +207,20 @@ ds.st.sub <- ds.st.sub %>%
   mutate(forest = if_else(dist2forest == 0, 1, 0)) %>%
   mutate_at(covariates, .funs = scale) %>%
   mutate(drains250 = as.factor(drains250)) %>%
-  mutate(pa = as.factor(pa)) %>%
+  mutate(pa = as.factor(pa), season = as.factor(season)) %>%
   droplevels()
 
-# season dummy
-ds.st.sub$season <- relevel(ds.st.sub$season, ref = 'wet')
+# set dummy reference levels
+ds.st.sub$season <- relevel(ds.st.sub$season, ref = 'wet') # season dummy
+ds.st.sub$pa <- relevel(ds.st.sub$pa, ref = '3') # pa dummy -- fully protected
 
 ##### test autocorrelation variogram #####
-library(gstat)
-t <- st_as_sf(ds.st.sub, coords = c('x','y'), crs = 32736)
-t <- as_Spatial(t)
-
-t.var<-gstat::variogram(vote~1, t)
-plot(t.var)
+# library(gstat)
+# t <- st_as_sf(ds.st.sub, coords = c('x','y'), crs = 32736)
+# t <- as_Spatial(t)
+# 
+# t.var<-gstat::variogram(vote~1, t)
+# plot(t.var)
 
 ##### test spatial scales for moving window metrics #####
 mod.ag.step <- glmer(vote ~ prop.ag.250 + (1|subject_name),
@@ -278,7 +279,9 @@ mod.global.interaction <- glmer(vote.ag ~ prop.ag.1500 + gHM*prop.forest.250 + d
 t <- AICc(mod.global.sub, mod.hm.sub, mod.nat.sub, mod.str.sub, mod.str2.sub, mod.str3.sub, mod.str4.sub, mod.global.interaction)
 
 summary(mod.global.sub)
-sjPlot::plot_model(mod.global.sub)
+sjPlot::tab_model(mod.global.sub, transform = 'plogis') # NULL/plogis
+
+sjPlot::plot_model(mod.global.sub, type = "pred", terms = c("prop.forest.250"))
 
 #### Grid-Based Model Fitting ####
 
@@ -323,49 +326,42 @@ occ.weights <- raster::overlay(stack, fun = weights)
 occ.weights <- rast(occ.weights)
 plot(occ.weights)
 
-# check results
-gme <- sf::st_read('./spatial data/GSE/GSE_2020.shp')
-getwYlOrRd <- RColorBrewer::brewer.pal(9, 'YlOrRd')
-library(mapview)
-mapview(gme, zcol = 'pa_status', col.regions = RColorBrewer::brewer.pal(3, 'Greens'), alpha = 0.3) + 
-  mapview(raster::raster(r.nostage), col.regions = YlOrRd, layer.name = 'non-staging relocations count') + 
-  mapview(raster::raster(r.stage), col.regions = YlOrRd, layer.name = 'staging relocations count') + 
-  mapview(raster::raster(rel.staging.occ), col.regions = YlOrRd, layer.name = 'relative density of staging')
-
-## save the output
-terra::writeRaster(rel.staging.occ, './Staging Areas/staging_reldensity_250m_20220109.tif', overwrite = T) 
-
 ## map of relative density of staging to non-staging
 library(tmap)
 gme <- sf::st_read('~/Dropbox (Personal)/CSU/GME_Movement/spatial data/GSE/GSE_2020.shp')
 dens.r <- raster::raster('./Staging Areas/staging_reldensity_250m_20220109.tif')
-rel.staging.map <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'serengeti-mara') +
-  tm_shape(dens.r, raster.downsample = FALSE) + tm_raster(palette = RColorBrewer::brewer.pal(5, 'YlOrRd'), title = 'Relative Staging Occurance')
+rel.staging.map <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'Protected Areas') +
+  tm_shape(dens.r, raster.downsample = FALSE) + tm_raster(palette = RColorBrewer::brewer.pal(5, 'YlOrRd'), title = 'Staging Proportion') 
+  # tm_layout(main.title = "Staging Locations and Proportions", 
+  #   main.title.position = "center")
 rel.staging.map
 
 tmap_save(rel.staging.map, "Rel Staging Map 20220109.png", dpi = 300)
 
 ## map of staging and ag-use relocs
 # define staging and ag-day reloc datasets
-stage.relocs <- filter(gme.stage, vote.ag == 1) %>%
+stage.relocs <- filter(used.df, vote.ag == 1) %>%
   st_as_sf(coords = c('x','y'), crs = 32736)
-ag.relocs <- gme.stage %>% 
+ag.relocs <- used.df %>% 
   filter(vote.ag == 0 & ag.window.ext == 1) %>%
   st_as_sf(coords = c('x','y'), crs = 32736) 
 
 # tmap
-stage.points <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'protected areas') +
-  tm_shape(ag.relocs) + tm_dots(size = 0.01, alpha = 0.03, col = '#FEE0D2') + 
-  tm_shape(stage.relocs) + tm_dots(size = 0.01, alpha = 0.02, col = '#DE2D26', title = 'staging relocs') + 
+stage.points <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'Protected Areas') +
+  tm_shape(ag.relocs) + tm_dots(size = 0.01, alpha = 0.03, col = '#FEE0D2') + # ag-day locs
+  tm_shape(stage.relocs) + tm_dots(size = 0.01, alpha = 0.02, col = '#DE2D26') + # staging locs 
   # add manual legend for tm_dot layers
-  tm_add_legend(title = 'staging relocs', type = 'symbol', labels = c('ag day relocs', 'staging relocs'), col = c('#FEE0D2', '#DE2D26')) +
-  # add map title
-  tm_layout(title = 'Staging Relocations')
+  tm_add_legend(title = 'Agricultural Use Locations', type = 'symbol', labels = c('ag-day', 'staging'), col = c('#FEE0D2', '#DE2D26')) 
+  # # add map title
+  # tm_layout(main.title = 'Staging Relocations',
+  #           main.title.position = 'center')
 stage.points
 
 tmap_save(stage.points, "Staging Relocs Map 20220109.png", dpi = 300)
 
-
+stage.panel <- tmap_arrange(stage.points, rel.staging.map)
+stage.panel
+tmap_save(stage.panel, "Staging Panel Map 20220109.png", dpi = 300)
 
 
 ##### Create Model Dataframe #####
@@ -387,36 +383,37 @@ summary(ds.st.sub$occ.weights)
 hist(ds.st.sub$rel.staging.occ)
 
 ##### test autocorrelation variogram #####
-library(gstat)
-t <- st_as_sf(ds.st.sub, coords = c('x','y'), crs = 32736)
-t <- as_Spatial(t)
-
-hscat(rel.staging.occ~1, t, 1:9*10000)
-
-
-t.var<-gstat::variogram(rel.staging.occ~1, t, cloud = T)
-plot(t.var)
-
-TheVariogramModel <- vgm(psill=50, model="Exp", nugget=0.02, range=100000)
-FittedModel <- fit.variogram(t.var, model=TheVariogramModel)
-plot(t.var, model=FittedModel)
+# library(gstat)
+# t <- st_as_sf(ds.st.sub, coords = c('x','y'), crs = 32736)
+# t <- as_Spatial(t)
+# 
+# hscat(rel.staging.occ~1, t, 1:9*10000)
+# 
+# 
+# t.var<-gstat::variogram(rel.staging.occ~1, t, cloud = T)
+# plot(t.var)
+# 
+# TheVariogramModel <- vgm(psill=50, model="Exp", nugget=0.02, range=100000)
+# FittedModel <- fit.variogram(t.var, model=TheVariogramModel)
+# plot(t.var, model=FittedModel)
 
 
 ##### Fit candidate models #####
 
-mod.global.sub.1000 <- glmer(rel.staging.occ ~ dist2ag + prop.forest.250 + drains250 + slope + gHM + pa + season + 
+mod.global.sub.250 <- glmer(rel.staging.occ ~ prop.ag.1500 + prop.forest.250 + drains250 + slope + gHM + dist2paedge + season + 
                                (1|subject_name), 
                             weights = log(occ.weights), # weights supplied as total counts that proportions arise from
                             data = ds.st.sub,
                             family = binomial)
-summary(mod.global.sub.1000)
+summary(mod.global.sub.250)
 
 
-sjPlot::plot_models(mod.global.sub.1000, mod.global.sub.250)
-
-plot(mod.global.sub.1000)
-plot(mod.global.sub.1000.xy)
+sjPlot::plot_model(mod.global.sub.250, transform = 'plogis')
+sjPlot::plot_model(mod.global.sub.250)
 
 
+sjPlot::tab_model(mod.global.sub.250, transform = 'plogis')
+sjPlot::tab_model(mod.global.sub.250)
 
+sjPlot::plot_model(mod.global.sub.250, type = 'pred', terms = 'prop.forest.250')
 
