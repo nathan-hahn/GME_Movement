@@ -68,6 +68,7 @@ boxplot(length$n)
 
 hist(length$n, xlab = 'staging length (hours)', main = 'Histogram of staging length', breaks = 12)
 
+summary(length$n)
 
 #' Summarise staging frequency distribution by individual and tactic. Use yearly tactics (n=101) 
 #' Note the Rare group with 100% stage percentages have very small numbers of 
@@ -233,7 +234,7 @@ mod.df$subject_sex <- as.factor(mod.df$subject_sex)
 mod.df$subject_ageClass <- as.factor(mod.df$subject_ageClass)
 mod.df$mean.bout <- as.numeric(mod.df$mean.bout)
 
-mod.df <- mod.df[mod.df$n.raid >= 5,] # 5 stages is the first quartile
+#mod.df <- mod.df[mod.df$n.raid >= 5,] # 5 stages is the first quartile
 
 ## Fit Model ##
 library(lme4)
@@ -330,7 +331,7 @@ View(t)
 summary(mod.6.bi)
 
 sjPlot::plot_model(mod.6.bi)
-
+sjPlot::tab_model(mod.6.bi)
 
 # Final table
 t$mod.formula <- as.character(t$mod.formula)
