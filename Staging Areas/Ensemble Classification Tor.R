@@ -263,7 +263,7 @@ gme.stage$stage.event.index <- eventIndex
 #' Check the hourly distribution of staging relocations
 
 # check distribution of stage relocs over the course of the day
-t <- filter(gme.stage, vote == 1) %>%
+t <- filter(gme.stage, vote.ag == 1) %>%
   group_by(hour(date)) %>% tally()
 ggplot(t, aes(as.factor(`hour(date)`), n)) + geom_bar(stat = 'identity') +
   xlab('hour of day') + ylab('n stage relocations')
@@ -271,7 +271,7 @@ ggplot(t, aes(as.factor(`hour(date)`), n)) + geom_bar(stat = 'identity') +
 #' The total number of stage events in the dataset is 5692.
 
 ## index staging events
-eventFlag <- ifelse(gme.stage$vote == 1, TRUE, FALSE)
+eventFlag <- ifelse(gme.stage$vote.ag == 1, TRUE, FALSE)
 eventIndex <- inverse.rle(within.list(rle(eventFlag),
                                            values[values] <- seq_along(values[values])))
 gme.stage$stage.event.index <- eventIndex
@@ -326,6 +326,6 @@ stage.summary <- gme.stage %>%
 
 
 #### Save Staging-Tagged Data ####
-write.csv(gme.stage,'./Staging Areas/movdata/GMEcollars_004_stageclassified_20211019.csv')
+write.csv(gme.stage,'./Staging Areas/movdata/GMEcollars_004_stageclassified_TOR_20211019.csv')
 
 
