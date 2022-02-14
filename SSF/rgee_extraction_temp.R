@@ -16,8 +16,10 @@ head(df)
 df$uid <- df$V1
 
 # Explore with random subset (for speed)
-
-ds <- df[sample(nrow(df), 1000000), ]
+ds <- df[df$id %in% c('Hugo-fec0','Ivy','Jacinta')]
+ds <- ds %>%
+  group_by(id) %>%
+  top_n(50000)
 
 # Prep dataframe for extraction -- using the step taken (t2) for cov extraction
 trackingdata <- as.data.frame(cbind(ds$uid, ds$id, ds$x2_, ds$y2_))
@@ -44,6 +46,7 @@ trackingdata$timestamp <- NULL # remove timestamp column
 # convert to lat-long for earth engine
 library(sp)
 library(raster)
+
 tt<-SpatialPoints(trackingdata[,3:4])
 crs(tt) <- '+init=epsg:32736'
 tt <- spTransform(tt, CRS = "+proj=longlat +datum=WGS84")
@@ -121,8 +124,8 @@ tmin
 tmax
 
 # give some buffer
-start<-"2011-08-01"
-end<-"2021-04-01"
+start<-"2015-08-01"
+end<-"2016-04-15"
 
 # Select MODIS imagery 
 # NOTE: The MODIS NDVI and EVI products are computed from atmospherically 
@@ -167,7 +170,7 @@ dataoutput
 
 ## make a slope image -- using SRTM 
 ee.drm <- ee$Image("USGS/SRTMGL1_003")
-ee.slope <- ee$Terrain$slope(drm)
+ee.slope <- ee$Terrain$slope(ee.drm)
 # check
 vis_params <- list(min=0, max=45, palette='white,black')
 Map$addLayer(ee.slope, vis_params)
@@ -180,40 +183,42 @@ vis_params <- list(min=0, max=1, palette='white,black')
 Map$addLayer(ee.gHM, vis_params)
 
 ## add forest layer from assets  
-ee.forest <- ee$Image('users/nhahnwa/slope_Estes-2019-11-21')
-vis_params <- list(min=0, max=45, palette='white,black')
-Map$addLayer(ee.forest, vis_params)
+ee.forest.250 <- ee$Image('users/nhahnwa/Hansen_forest30_2019_focal_r250')
+vis_params <- list(min=0, max=1, palette='white,black')
+Map$addLayer(ee.forest.250, vis_params)
 
 
-tsf <- datasf[1:10000,]
-tsf$uniq <- rep(1:1000, each=1000)[1:nrow(tsf)] #This is for up to 1 million points. To increase the max number of points, increase the value for max repetitions. To change the number of points to run per time, change the value in the argument each.
-
-start_time <- Sys.time()
-dataoutput <- data.frame()
-for(x in unique(tsf$uniq)){
-  data1 <- tsf %>% filter(uniq == x)
-  data.gHM <- ee_extract(x = ee.gHM, y = data1, sf = FALSE, scale = 1000)
-  data.slope <- ee_extract(x = ee.slope, y = data1, sf = FALSE, scale = 30)
-  # Append - gHM used to index uid, slope variable appended on
-  temp <- inner_join(data.gHM, data.slope, by = c('uid', 'id', 'Date','uniq'), keep = F)
-  dataoutput <- rbind(dataoutput, temp)
-}  
-end_time <- Sys.time()
-end_time - start_time
+# tsf <- datasf[1:10000,]
+# tsf$uniq <- rep(1:1000, each=1000)[1:nrow(tsf)] #This is for up to 1 million points. To increase the max number of points, increase the value for max repetitions. To change the number of points to run per time, change the value in the argument each.
+# 
+# start_time <- Sys.time()
+# dataoutput <- data.frame()
+# for(x in unique(tsf$uniq)){
+#   data1 <- tsf %>% filter(uniq == x)
+#   data.gHM <- ee_extract(x = ee.gHM, y = data1, sf = FALSE, scale = 1000)
+#   data.slope <- ee_extract(x = ee.slope, y = data1, sf = FALSE, scale = 30)
+#   # Append - gHM used to index uid, slope variable appended on
+#   temp <- inner_join(data.gHM, data.slope, by = c('uid', 'id', 'Date','uniq'), keep = F)
+#   dataoutput <- rbind(dataoutput, temp)
+# }  
+# end_time <- Sys.time()
+# end_time - start_time
 
 
 #### Test combination of NDVI and static data ####
 
 start_time <- Sys.time()
 dataoutput <- data.frame()
-for(x in unique(tsf$uniq)){
-  chunk <- tsf %>% filter(uniq == x)
+for(x in unique(datasf$uniq)){
+  chunk <- datasf %>% filter(uniq == x)
   
   ## Perform static extraction
   data.gHM <- ee_extract(x = ee.gHM, y = data1, sf = TRUE, scale = 1000)
   data.slope <- ee_extract(x = ee.slope, y = data1, sf = TRUE, scale = 30)
+  data.forest <- ee_extract(x = ee.forest.250, y = data1, sf = TRUE, scale = 30)
   # Append back to chunk - gHM used to index uid, slope variable appended on
   slope <- data.slope$slope
+  forest <- data.forest$forest
   chunk <- cbind(data.gHM, slope)
   
   ## Perform temporal extraction
@@ -235,14 +240,14 @@ for(x in unique(tsf$uniq)){
 end_time <- Sys.time()
 end_time - start_time
 
-dataoutput
 
 # update band name for NDVI -- check indexing first!!!
+dataoutput
 names(dataoutput)[3] <- band
 dataoutput
 
 
-
+write.csv('')
 
 
 
