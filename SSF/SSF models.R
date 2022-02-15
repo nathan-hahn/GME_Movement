@@ -15,6 +15,7 @@ set.seed(1)
 # read data
 #movdata <- readRDS('./SSF/eledata_expanded.rds')
 movdata <- readRDS('./SSF/eledata_allmara.RDS')
+movdata <- movdata[!movdata$subject_name %in% c('Shamba','Courtney','David','Pepper'),]
 
 # create date object
 movdata$date <- as.POSIXct(movdata$date) # check still in EAT
@@ -55,18 +56,19 @@ sl_distr = fit_distr(p$sl_, "gamma")
 ta_distr = fit_distr(p$ta_, "vonmises")
 
 # create random steps
-cores = 5
-ssf.randsteps <- parallel::mclapply(t2, function(x) {
-  set.seed(1)
-  x %>% random_steps(n_control = avail.steps, 
-                     sl_distr = sl_distr,
-                     ta_distr = ta_distr) }, mc.cores = cores)
-
-# check
-head(ssf.randsteps[[1]])
+{tic()
+  cores = 6
+  ssf.randsteps <- parallel::mclapply(t2, function(x) {
+    set.seed(1)
+    x %>% random_steps(n_control = avail.steps, 
+                      sl_distr = sl_distr,
+                      ta_distr = ta_distr) }, mc.cores = cores)
+toc()}
 
 # create dataframe
 ssf.randsteps <- do.call(rbind, ssf.randsteps)
+# check
+head(ssf.randsteps)
 
 # add subject_names
 t <- movdata %>% group_by(id, subject_name, subject_sex, tactic.agg) %>% tally() %>% dplyr::select(-n)
