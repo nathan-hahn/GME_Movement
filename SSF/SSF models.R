@@ -16,8 +16,9 @@ set.seed(1)
 #movdata <- readRDS('./SSF/eledata_expanded.rds')
 
 movdata <- readRDS('./SSF/eledata_allmara.RDS')
-movdata <- movdata[!movdata$subject_name %in% c('Shamba','Courtney','David','Pepper'),]
-movdata <- movdata[!movdata$fixType != 'irregular',]
+movdata <- movdata[!movdata$subject_name %in% c('Shamba','Courtney','David','Pepper', 'Bobo'),]
+movdata <- movdata[movdata$fixType != 'irregular',]
+
 
 # create date object
 movdata$date <- as.POSIXct(movdata$date) # check still in EAT
@@ -27,8 +28,8 @@ movdata$subject_year <- paste(movdata$subject_name, movdata$year.cuts, sep = '-'
 
 # make a move object for the amt package - we will use the id, which is a
 #         combination of the animal's name and collar number
-track <- make_track(movdata, .x = x, .y = y, .t = date, id = id, subject_name = subject_name)
-t1 <- split(track, track$id)
+track <- make_track(movdata, .x = x, .y = y, .t = date, subject_name = subject_name)
+t1 <- split(track, track$subject_name)
 
 # create bursts and traj - map the two functions to a nested dataset t1
 t2 <- lapply(t1, function(x)
@@ -43,7 +44,12 @@ p <- do.call(rbind, t2)
 ggplot(p, aes(sl_, fill = factor(subject_name))) + geom_density(alpha = 0.4)
 ggplot(p, aes(ta_, fill = factor(subject_name))) + geom_density(alpha = 0.4)
 
-max(p$sl_) # 6947.313 (~7km/hr max -- ok)
+max(p$sl_) # 13k
+
+# t2 <- lapply(t2, function(x)
+#   x %>% filter(sl_ < 9000)) #(~9km/hr max)
+
+p %>% group_by(subject_name) %>% tally()
 
 ##### Generate SSF Availability sample #####
 #' Next we will generate the availability sample for the Step Selection and integrated Step Selection functions. 
@@ -59,7 +65,7 @@ p <- do.call(rbind, t2)
 sl_distr = fit_distr(p$sl_, "gamma")
 ta_distr = fit_distr(p$ta_, "vonmises")
 
-# create random steps ~ 89 seconds for allmara dataset!!
+# create random steps ~ xx seconds for allmara dataset!!
 {tic()
   cores = 6
   ssf.randsteps <- parallel::mclapply(t2, function(x) {
@@ -74,10 +80,11 @@ ssf.randsteps <- do.call(rbind, ssf.randsteps)
 # check
 dim(ssf.randsteps)
 head(ssf.randsteps)
+prop.table(table(ssf.randsteps$case_, ssf.randsteps$subject_name), margin = 2)
 
-# add subject_names
-t <- movdata %>% group_by(id, subject_name, subject_sex, tactic.agg) %>% tally() %>% dplyr::select(-n)
-ssf.df <- inner_join(x = t, y = ssf.randsteps, by = 'id')
+# add metadata, matching by subject_names
+t <- movdata %>% group_by(subject_name, subject_sex, tactic.agg) %>% tally() %>% dplyr::select(-n)
+ssf.df <- inner_join(x = t, y = ssf.randsteps, by = 'subject_name')
 
 # look at turning angle distribution for random steps
 ssf.df %>% 
@@ -91,6 +98,8 @@ ssf.df %>%
   filter(case_ == FALSE) %>%
   ggplot(aes(sl_, fill = factor(subject_name))) + geom_density(alpha = 0.4)
 
+
+prop.table(table(ssf.df$case_, ssf.df$subject_name), margin = 2)
 
 # remove extra dataframes
 remove(ssf.randsteps)
@@ -149,7 +158,7 @@ ssf.sf <- ssf.df %>%
   st_as_sf(coords = c('x2_','y2_'), crs = study.area) %>% # specify here to extract at beginning (x1/y1) or end (x2/y2) of step
   terra::vect() 
 
-# extract in parallel - xx seconds with allmara dataset
+# extract in parallel - 179 seconds with allmara dataset
 {tic()
   cores = 6
   extract <- mclapply(r.list, function(x)
@@ -187,10 +196,10 @@ ssf.ext <- ssf.ext[ssf.ext$ndviCoV < 20,] # removes three major outliers from Ma
 #' correctly!
 
 summary(ssf.ext)
-
+unique(ssf.ext$subject_name)
 # drop old dataframes
-remove(extract)
-remove(used)
+#remove(extract)
+#remove(used)
 
 
 ##### Fit SSF Model #####
@@ -222,12 +231,11 @@ remove(used)
 ## Run in parallel 
 
 # fit model
-library(survival)
 {tic()
   cores = 6
   m.ind.ssf <- split(ssf.ext, ssf.ext$subject_name) # chose splitting variable (subject_name or subject_year)
   m.ind.ssf <- mclapply(m.ind.ssf, function(x) {
-    t <- amt::fit_issf(x, case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV +
+    t <- amt::fit_issf(x, case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + gHM +
                           sl_ + log_sl_ + cos_ta_ + # movement parameters
                           strata(step_id_)) 
     t <- t$model }, # select only the model output
@@ -249,6 +257,8 @@ id.est.ssf <- dplyr::bind_rows(id.est.ssf, .id = "subject_name")
 t <- movdata %>% group_by(subject_name, subject_sex, tactic.agg) %>% tally() %>% dplyr::select(-n)
 id.est.ssf <- merge(id.est.ssf, t, by = 'subject_name')
 
+# Remove tressa -- does not interact with ag very much
+id.est.ssf <- filter(id.est.ssf, subject_name != 'Tressa')
 
 ##### plot results #####
 
@@ -256,20 +266,20 @@ id.est.ssf <- merge(id.est.ssf, t, by = 'subject_name')
 ggplot(id.est.ssf, aes(x = as.factor(term), y = estimate, color = subject_name)) + 
   geom_pointrange(aes(ymin = ymin, ymax = ymax),
                   position = position_dodge(width = 0.3)) +
-  xlab('covariate') + ggtitle('rsf individual-level estimates') +
+  xlab('covariate') + ggtitle('ssf individual-level estimates') +
   labs(color = 'subject_name') + 
   coord_flip()
 
 # coeff estimates by sex
 ggplot(id.est.ssf, aes(x = as.factor(term), y = estimate, color = subject_sex)) +
   geom_boxplot() +
-  xlab('covariate') + ggtitle('rsf individual-level estimates by sex') +
+  xlab('covariate') + ggtitle('ssf individual-level estimates by sex') +
   labs(color = 'sex') + 
   coord_flip()
 
 # coeff estimates by tactic (aggregate)
 ggplot(id.est.ssf, aes(x = as.factor(term), y = estimate, color = factor(tactic.agg))) +
   geom_boxplot() +
-  xlab('covariate') + ggtitle('rsf individual-level estimates by ag tactic') +
+  xlab('covariate') + ggtitle('ssf individual-level estimates by ag tactic') +
   labs(color = 'ag tactic (aggregate)') + 
   coord_flip() 
