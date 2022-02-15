@@ -15,6 +15,7 @@ set.seed(1)
 #movdata <- readRDS('./SSF/eledata_expanded.rds')
 movdata <- readRDS('./SSF/eledata_allmara.RDS')
 movdata <- movdata[!movdata$subject_name %in% c('Shamba','Courtney','David','Pepper'),]
+movdata <- movdata[!movdata$fixType != 'irregular',]
 
 # create date object
 movdata$date <- as.POSIXct(movdata$date) # check still in EAT

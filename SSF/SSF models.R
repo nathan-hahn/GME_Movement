@@ -14,8 +14,10 @@ set.seed(1)
 
 # read data
 #movdata <- readRDS('./SSF/eledata_expanded.rds')
+
 movdata <- readRDS('./SSF/eledata_allmara.RDS')
 movdata <- movdata[!movdata$subject_name %in% c('Shamba','Courtney','David','Pepper'),]
+movdata <- movdata[!movdata$fixType != 'irregular',]
 
 # create date object
 movdata$date <- as.POSIXct(movdata$date) # check still in EAT
@@ -31,15 +33,17 @@ t1 <- split(track, track$id)
 # create bursts and traj - map the two functions to a nested dataset t1
 t2 <- lapply(t1, function(x)
   x %>% track_resample(rate = minutes(60), tolerance = minutes(30)) %>% steps_by_burst() %>%
-    mutate(id = unique(x$id)))
+    mutate(subject_name = unique(x$subject_name)))
+
 
 ## plot the step length and turning angle distributions
 
 # Plot step length and turn angle distributions
 p <- do.call(rbind, t2)
-ggplot(p, aes(sl_, fill = factor(id))) + geom_density(alpha = 0.4)
-ggplot(p, aes(ta_, fill = factor(id))) + geom_density(alpha = 0.4)
+ggplot(p, aes(sl_, fill = factor(subject_name))) + geom_density(alpha = 0.4)
+ggplot(p, aes(ta_, fill = factor(subject_name))) + geom_density(alpha = 0.4)
 
+max(p$sl_) # 6947.313 (~7km/hr max -- ok)
 
 ##### Generate SSF Availability sample #####
 #' Next we will generate the availability sample for the Step Selection and integrated Step Selection functions. 
@@ -55,7 +59,7 @@ p <- do.call(rbind, t2)
 sl_distr = fit_distr(p$sl_, "gamma")
 ta_distr = fit_distr(p$ta_, "vonmises")
 
-# create random steps
+# create random steps ~ 89 seconds for allmara dataset!!
 {tic()
   cores = 6
   ssf.randsteps <- parallel::mclapply(t2, function(x) {
@@ -68,6 +72,7 @@ toc()}
 # create dataframe
 ssf.randsteps <- do.call(rbind, ssf.randsteps)
 # check
+dim(ssf.randsteps)
 head(ssf.randsteps)
 
 # add subject_names
