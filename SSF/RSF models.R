@@ -1,4 +1,4 @@
-##### Individual-Level RSF #####
+##### Resource Selection Model (Third Order Selection) #####
 
 library(amt)
 library(tidyverse)
@@ -14,6 +14,7 @@ set.seed(69)
 # read data
 #movdata <- readRDS('./SSF/eledata_expanded.rds')
 movdata <- readRDS('./SSF/eledata_allmara.RDS')
+movdata <- movdata[!movdata$subject_name %in% c('Shamba','Courtney','David','Pepper'),]
 
 # create date object
 movdata$date <- as.POSIXct(movdata$date) # check still in EAT
@@ -66,7 +67,7 @@ remove(rsf.usedpoints)
 
 #saveRDS(rsf.df, './SSF/rsf.df.allmara.RDS')
 
-##### 2. Resource Selection Model (Third Order Selection) #####
+##### Covariate Extraction #####
 
 #' We now have used (case_ == TRUE) and available (case_ == FALSE) points for each individual. Before we can begin 
 #' modeling, we have to extract covariates. We will use the amt package function to do this. 
@@ -144,7 +145,10 @@ rsf.ext <- cbind(rsf.df, used)
 rsf.ext <- rsf.ext %>%
   mutate_at(.vars = c('slope', 'ndviCoV'), .funs = scale) %>%
   mutate_at(.vars = c('ag','cover20','cover2070','cover70','drains'), .funs = function(x) if_else(!is.na(x), 1, 0)) %>%
-  mutate_at(.vars = c('ag','cover20','cover2070','cover70'), .funs = as.factor)
+  mutate_at(.vars = c('ag','cover20','cover2070','cover70', 'drains'), .funs = as.factor)
+
+# filter out NDVI cov outliers
+rsf.ext <- rsf.ext[rsf.ext$ndviCoV < 20,] # removes three major outliers from Marima dataset
 
 #' Our covariates are now extracted. Before model fitting, check the data frame to make sure we did everything 
 #' correctly!
@@ -152,8 +156,8 @@ rsf.ext <- rsf.ext %>%
 summary(rsf.ext)
 
 # drop old dataframes
-remove(extract)
-remove(used)
+#remove(extract)
+#remove(used)
 
 ##### Fit Population-Level RSF Model #####
 #' To make things simple, we are going to forego model selection and fit the same model for each of the RSF, SSF, and 
@@ -163,7 +167,7 @@ remove(used)
 rsf.ext$case_ <- as.factor(rsf.ext$case_)
 rsf.ext$subject_name <- as.factor(rsf.ext$subject_name)
 
-m <- rsf.ext %>% fit_logit(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + gHM)
+m <- glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + gHM, data = rsf.ext, family = binomial)
 summary(m)
 
 m1 <- rsf.ext %>% fit_logit(case_ ~ ag + cover2070 + cover70 + slope + ndviCoV + drains + gHM)
@@ -172,14 +176,18 @@ m3 <- rsf.ext %>% fit_logit(case_ ~ ag + prop.settlement.1500)
 m4 <- rsf.ext %>% fit_logit(case_ ~ cover20 + cover2070 + cover70 + slope + ndviCoV + drains)
 m5 <- rsf.ext %>% fit_logit(case_ ~ ag*cover70 + slope + ndviCoV + gHM)
 
-m.rsf <- glmer(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + (1|subject_name),
-              data = rsf.ext, family = binomial)
+# m.rsf <- glmer(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + (1|subject_name),
+#               data = rsf.ext, family = binomial)
 
-# check out the summary
-summary(m.rsf)
+library(MuMIn)
+tab <- model.sel(m$model, m1$model, m2$model, m3$model, m4$model, m5$model)
+View(tab)
+
+# check out the summary of top model
+summary(m)
 
 # viz the covariates
-sjPlot::plot_model(m$model, transform = NULL, df_method='wald')
+#sjPlot::plot_model(m$model, transform = NULL, df_method='wald')
 
 
 ##### Fit Individual-level RSF #####
@@ -187,16 +195,18 @@ sjPlot::plot_model(m$model, transform = NULL, df_method='wald')
 
 # fit model
 {tic()
-  cores = 5
+  cores = 6
   m.ind.rsf <- split(rsf.ext, rsf.ext$subject_name)
-  m.ind.rsf <- parallel::mclapply(m.ind.rsf, function(x)
-    fit_logit(x, case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV), mc.cores = cores)
+  m.ind.rsf <- mclapply(m.ind.rsf, function(x) 
+    glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + gHM, data = x, family = 'binomial'), 
+    mc.cores = cores)
   names(m.ind.rsf) <- unique(rsf.ext$subject_name)
 toc()}
 
+
 # get table of estimates for each individual
 id.est.rsf <- lapply(m.ind.rsf, function(x) 
-  tab <- broom::tidy(x$model) %>%
+  tab <- x %>% broom::tidy() %>%
     mutate(
       ymin = estimate - 1.96 * std.error,
       ymax = estimate + 1.96 * std.error
@@ -204,12 +214,31 @@ id.est.rsf <- lapply(m.ind.rsf, function(x)
 id.est.rsf <- dplyr::bind_rows(id.est.rsf, .id = "subject_name")
 
 # add other ele metadata (sex, ag tactic, etc.)
+t <- movdata %>% group_by(subject_name, subject_sex, tactic.agg) %>% tally() %>% dplyr::select(-n)
+id.est.rsf <- merge(id.est.rsf, t, by = 'subject_name')
 
+id.est.rsf <- filter(id.est.rsf, !subject_name %in% c('Courtney','David','Pepper','Chelsea'))
 
-# plot results
+##### plot results #####
+
+# coeff estimates for all individuals
 ggplot(id.est.rsf, aes(x = as.factor(term), y = estimate, color = subject_name)) + 
   geom_pointrange(aes(ymin = ymin, ymax = ymax),
                   position = position_dodge(width = 0.3)) +
+  xlab('covariate') + ggtitle('rsf individual-level estimates') +
+  labs(color = 'subject_name') + 
   coord_flip()
 
+# coeff estimates by sex
+ggplot(id.est.rsf, aes(x = as.factor(term), y = estimate, color = subject_sex)) +
+  geom_boxplot() +
+  xlab('covariate') + ggtitle('rsf individual-level estimates by sex') +
+  labs(color = 'sex') + 
+  coord_flip()
 
+# coeff estimates by tactic (aggregate)
+ggplot(id.est.rsf, aes(x = as.factor(term), y = estimate, color = factor(tactic.agg))) +
+  geom_boxplot() +
+  xlab('covariate') + ggtitle('rsf individual-level estimates by ag tactic') +
+  labs(color = 'ag tactic (aggregate)') + 
+  coord_flip() 
