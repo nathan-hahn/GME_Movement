@@ -7,7 +7,7 @@ library(terra)
 library(sf)
 library(tictoc)
 
-set.seed(69)
+set.seed(1)
 
 ##### 1a. Prepare Data #####
 
@@ -43,7 +43,7 @@ rand.factor = 5 # 5:1 unused:used
 rsf.randpoints <- do.call(rbind, t1)
 rsf.randpoints <- split(rsf.randpoints, rsf.randpoints$subject_name) # split variable (subject_name or subject_year)
 rsf.randpoints <- parallel::mclapply(rsf.randpoints, function(x) {
-  set.seed(69)
+  set.seed(1)
   rp <- x %>% amt::random_points(n = nrow(.)*rand.factor, hr = 'mcp') # 
   rp$subject_name = unique(x$subject_name) # update this by the split variable
   return(rp) }, mc.cores = cores)
