@@ -26,7 +26,7 @@ library(lubridate)
 setwd('~/Dropbox/CSU/GME_Movement')
 
 # import algorithm results matrix
-result.matrix <- readRDS("~/Dropbox/CSU/GME_Movement/Staging Areas/tor loop tests/Torloop_w2_6to21_seq7to2_20211223.RDS")
+result.matrix <- readRDS("~/Dropbox/CSU/GME_Movement/Staging Areas/tor loop tests/Torloop_w2_6to21_seq7to2_agmask01_20220103.RDS")
 
 # convert matrix to dataframe for viz
 result.df <- as.data.frame(result.matrix)
@@ -69,7 +69,8 @@ boxplot((1-plot.df$n.stage.err) ~ plot.df$win.end, xlab = 'window end time', yla
 ##### Import dataset #####
 
 # import dataset
-gme <- readRDS('./Staging Areas/nsd loop tests/tor.3.w2.filter.RDS')
+#gme <- readRDS('./Staging Areas/nsd loop tests/tor.3.w2.filter.RDS')
+gme <- readRDS('./Staging Areas/nsd loop tests/GMEcollars_004_stageclassified_tor.3.filter_20211019.RDS')
 
 ## assign unique id to each ag window event
 # define unique id for window/non-window phases
@@ -85,8 +86,6 @@ gme$ag.window.index <- eventIndex
 #' accuracy. Relocations with a vote total greater than the mean is tagged as a 
 #' stage.
 
-##### Ensemble Voting #####
-
 # prep plot.df and create empty lists
 plot.df <- arrange(plot.df, n.stage.err) # order by descending error
 plot.df$n.stage.acc <- 1-plot.df$n.stage.err # accuracy = 1-error
@@ -96,11 +95,7 @@ plot.df$n.stage.acc <- 1-plot.df$n.stage.err # accuracy = 1-error
 plot.df <- filter(plot.df, n.stage.acc >= 0.5)
 dim(plot.df) # unique permutations
 
-# create new dataframe
-gme.stage <- gme
-
 # dump dataframes
-remove(gme)
 remove(result.matrix)
 remove(result.df)
 
@@ -125,9 +120,9 @@ for (i in 1:length(split)){
   for (j in 1:dim(split[[i]])[1]) { # voting by row of split df -- row corresponds with the parameter set and accuracy for each model
     pct.threshold = df$tor.seq[j]
     win.size = df$win.siz[j]
-    gme.stage$stage.period <- ifelse(hour(gme.stage$date) >= df$win.start[j] & hour(gme.stage$date) <= df$win.end[j], 1, 0)
+    gme$stage.period <- ifelse(hour(gme$date) >= df$win.start[j] & hour(gme$date) <= df$win.end[j], 1, 0)
     
-    df2 <- gme.stage %>%
+    df2 <- gme %>%
       filter(!is.na(ag.window.ext)) %>%
       group_by(dayBurst, stage.period, ag.window.ext) %>%
       # mean tor
@@ -160,7 +155,8 @@ end <- Sys.time()
 
 end - start
 
-sums.all <- readRDS('Staging Areas/tor loop tests/tor_ensemble_sums.all_20211229.RDS')
+#saveRDS(sums.all, 'Staging Areas/tor loop tests/tor_ensemble_sums.all_agmask_v2_20220103.RDS')
+sums.all <- readRDS('Staging Areas/tor loop tests/tor_ensemble_sums.all_agmask_v2_20220103.RDS')
 
 #' The resulting dataframe has a column for each model (xx) and each row corresponds
 #' to a GPS relocation. If a stage is detected for a given model, the vote value 
@@ -185,19 +181,19 @@ df.weight$majority <- ifelse(df.weight$stagesum > w.mu, 1,0)
 # relocs in and outside stage
 table(df.weight$majority)
 
-gme.stage$vote <- df.weight$majority
+gme$vote <- df.weight$majority
 
 ##### Get Ensemble Accuracy #####
 ## Not Run
 
 ## index staging events
-eventFlag <- ifelse(gme.stage$vote == 1, TRUE, FALSE)
+eventFlag <- ifelse(gme$vote == 1, TRUE, FALSE)
 eventIndex <- inverse.rle(within.list(rle(eventFlag), 
                                       values[values] <- seq_along(values[values])))
 # assign a unique event index for each stage event
-gme.stage$stage.event.index <- eventIndex
+gme$stage.event.index <- eventIndex
 
-table <- gme.stage %>% group_by(ag.window.ext) %>%
+table <- gme %>% group_by(ag.window.ext) %>%
   summarise(n.stage = length(unique(stage.event.index)), 
             n.stage.adj = n.stage/length(unique(dayBurst)) )
 
@@ -208,29 +204,20 @@ table <- table %>%
 table
 
 # check omission error rate
-gme.stage %>% ungroup() %>% filter(ag.window.ext == 1) %>% summarise(n.agdays = length(unique(ag.window.index)), 
+gme %>% ungroup() %>% filter(ag.window.ext == 1) %>% summarise(n.agdays = length(unique(ag.window.index)), 
                                                                      n.stage = length(unique(stage.event.index)),
                                                                      omission = 1 - n.stage/n.agdays )
 
 ##### Adjust Using Spatial Threshold Filter #####
 
-# Add dist2ag 
-locs <- sf::st_as_sf(gme.stage, coords = c('x','y'), crs = 32736) %>%
-  terra::vect()
-dist2ag <- terra::rast('./spatial data/dist2ag_estes_32736_2019-11-21.tif')
-dist2forest <- terra::rast('./spatial data/dist2forest_hansen_cover60_32736_30.tif')
-
-gme.stage$dist2ag <- terra::extract(dist2ag, locs)[,2]
-gme.stage$dist2forest <- terra::extract(dist2forest, locs)[,2]
-
-# Define spatial threshold
-#gme.stage$vote.thresh <- ifelse(gme.stage$dist2ag <= 3500, gme.stage$vote, 0)
-gme.stage$vote.thresh <- ifelse(gme.stage$dist2forest <= 1200, gme.stage$vote, 0)
+gme$vote.thresh <- ifelse(gme$dist2ag <= 3500, gme$vote, 0)
+#gme$vote.thresh <- ifelse(gme$dist2forest <= 1200, gme$vote, 0)
 
 ## index staging events
-gme.stage$stage.event.index <- ifelse(gme.stage$vote.thresh == 1, gme.stage$dayBurst, 0)
+gme$stage.event.index <- ifelse(gme$vote.thresh == 1, gme$dayBurst, 0)
 
-table <- gme.stage %>% group_by(ag.window.ext) %>%
+
+table <- gme %>% group_by(ag.window.ext) %>%
   summarise(n.stage = length(unique(stage.event.index)), 
             n.stage.adj = n.stage/length(unique(dayBurst)) )
 
@@ -241,29 +228,29 @@ table <- table %>%
 table
 
 # spatial threshold - check omission error rate
-gme.stage %>% ungroup() %>% filter(ag.window.ext == 1) %>% summarise(n.agdays = length(unique(ag.window.index)), 
+gme %>% ungroup() %>% filter(ag.window.ext == 1) %>% summarise(n.agdays = length(unique(ag.window.index)), 
                                                                n.stage = length(unique(stage.event.index)),
-                                                               omission = 1-n.stage/n.agdays )
+                                                               omission = 1 - n.stage/n.agdays )
 
 
 ##### Create stage-tagged dataset #####
 
 ## apply ag filter to identify true staging
-gme.stage$vote.ag <- ifelse(gme.stage$ag.window.ext == 1, gme.stage$vote, 0)
-gme.stage$vote.nonag <- ifelse(gme.stage$ag.window.ext == 0, gme.stage$vote, 0)
+gme$vote.ag <- ifelse(gme$ag.window.ext == 1, gme$vote, 0)
+gme$vote.nonag <- ifelse(gme$ag.window.ext == 0, gme$vote, 0)
 
 ## index ag staging events
-eventFlag <- ifelse(gme.stage$vote.ag == 1, TRUE, FALSE)
+eventFlag <- ifelse(gme$vote.ag == 1, TRUE, FALSE)
 eventIndex <- inverse.rle(within.list(rle(eventFlag), 
                                       values[values] <- seq_along(values[values])))
 # assign a unique event index for each stage event
-gme.stage$stage.event.index <- eventIndex
+gme$stage.event.index <- eventIndex
 #' ##### Staging Area Data Summaries
 
 #' Check the hourly distribution of staging relocations
 
 # check distribution of stage relocs over the course of the day
-t <- filter(gme.stage, vote.ag == 1) %>%
+t <- filter(gme, vote.ag == 1) %>%
   group_by(hour(date)) %>% tally()
 ggplot(t, aes(as.factor(`hour(date)`), n)) + geom_bar(stat = 'identity') +
   xlab('hour of day') + ylab('n stage relocations')
@@ -271,18 +258,18 @@ ggplot(t, aes(as.factor(`hour(date)`), n)) + geom_bar(stat = 'identity') +
 #' The total number of stage events in the dataset is 5692.
 
 ## index staging events
-eventFlag <- ifelse(gme.stage$vote.ag == 1, TRUE, FALSE)
+eventFlag <- ifelse(gme$vote.ag == 1, TRUE, FALSE)
 eventIndex <- inverse.rle(within.list(rle(eventFlag),
                                            values[values] <- seq_along(values[values])))
-gme.stage$stage.event.index <- eventIndex
+gme$stage.event.index <- eventIndex
 
-length(unique(gme.stage$stage.event.index))
+length(unique(gme$stage.event.index))
 
 #' Calculate distribution of staging frequency prior to crop raiding among individuals. 
 
 # summarise overall % staging distribution
-stage.summary <- gme.stage %>%
-  #group_by(subject_name) %>%
+stage.summary <- gme %>%
+  group_by(subject_name) %>%
   summarise(n.stage = length(unique(stage.event.index)),
             n.raid = length(unique(ag.window.index)),
             pct.stage = n.stage/n.raid) 
@@ -294,7 +281,7 @@ summary(stage.summary$pct.stage)
 #' stages. See the end of the script for data summary.
 
 # summarise % staging distribution by individual-year tactic
-stage.summary <- gme.stage %>%
+stage.summary <- gme %>%
   group_by(subject_name, tactic.season, year.cuts) %>%
   summarise(n.stage = length(unique(stage.event.index)),
             n.raid = length(unique(ag.window.index)),
@@ -309,15 +296,15 @@ boxplot(stage.summary$pct.stage ~ stage.summary$tactic.season,
 
 ##### Plot Staging Events #####
 library(sf)
-gme <- sf::st_read('./spatial data/GSE/GSE_2020.shp') 
-stage.relocs <- filter(gme.stage, vote.ag == 1)
+gme.shp <- sf::st_read('./spatial data/GSE/GSE_2020.shp') 
+stage.relocs <- filter(gme, vote.ag == 1)
 
-ggplot(data = gme) + geom_sf() + coord_sf(datum=st_crs(32736)) + 
+ggplot(data = gme.shp) + geom_sf() + coord_sf(datum=st_crs(32736)) + 
   geom_point(data = stage.relocs, aes(x, y, color = 'red'), size = 0.2, alpha = 0.2) +
   labs(color = 'staging relocations')
 
 #' Table of staging events and ag bouts for each individual-year
-stage.summary <- gme.stage %>%
+stage.summary <- gme %>%
   group_by(subject_name, tactic.season, year.cuts) %>%
   summarise(n.stage = length(unique(stage.event.index)),
             n.raid = length(unique(ag.window.index)),
@@ -326,6 +313,6 @@ stage.summary <- gme.stage %>%
 
 
 #### Save Staging-Tagged Data ####
-write.csv(gme.stage,'./Staging Areas/movdata/GMEcollars_004_stageclassified_TOR_20211019.csv')
+write.csv(gme,'./Staging Areas/movdata/GMEcollars_004_stageclassified_agmask_TOR_20220103.csv')
 
 
