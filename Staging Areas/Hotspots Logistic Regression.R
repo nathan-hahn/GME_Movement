@@ -6,6 +6,7 @@ library(sf)
 library(lme4)
 library(MuMIn)
 library(spdep)
+library(data.table)
 
 ## Raster layer prep
 prop.ag.250 <- rast("./spatial data/estes_ag_pct_250.tif")
@@ -68,11 +69,6 @@ names(stack.250) <- c('prop.ag.250','prop.ag.1500','prop.forest.250','prop.fores
 used.df <- as.data.frame(data.table::fread('./Staging Areas/movdata/movdat_004_lsdv_20220109.csv'))
 used.df$V1 <- NULL
 
-#nsd
-used.df <- as.data.frame(data.table::fread('./Staging Areas/movdata/movdat_004_lsdv_NSD_20220109.csv'))
-used.df$V1 <- NULL
-
-#tor
 
 ##### Create Grid #####
 ## create grid -- 250m with extent based on gHM Estes (1000m res)
@@ -116,8 +112,8 @@ occ.weights <- raster::overlay(stack, fun = weights)
 occ.weights <- rast(occ.weights)
 plot(occ.weights)
 
-#writeRaster(rel.staging.occ, './Staging Areas/rel.staging.occ_20220128.tif')
-#writeRaster(occ.weights, './Staging Areas/occ.weights_20220128.tif')
+# writeRaster(rel.staging.occ, './Staging Areas/rel.staging.occ_hmm_20220128.tif')
+# writeRaster(occ.weights, './Staging Areas/occ.weights_hmm_20220128.tif')
 
 ##### Make Individual Movement Grids #####
 
@@ -168,7 +164,7 @@ used <- matrix(1, nrow = nrow(r.base.locs), ncol = 12)
 # ~60 seconds
 system.time({
   used[,1] <- terra::extract(rel.staging.occ, r.base.locs)[,2]
-  used[,2] <- terra::extract(weights.occ, r.base.locs)[,2]
+  used[,2] <- terra::extract(occ.weights, r.base.locs)[,2]
   used[,3] <- terra::extract(stack.250$prop.ag.250, r.base.locs) [,2]
   used[,4] <- terra::extract(stack.250$prop.ag.1500, r.base.locs)[,2]
   used[,5] <- terra::extract(stack.250$prop.forest.250, r.base.locs)[,2]
@@ -213,7 +209,7 @@ rownames(hotspots) <- NULL
 summary(hotspots)
 
 #write.csv(hotspots, './Staging Areas/movdata/staging_hotspots_datatable.csv')
-
+hotspots <- read.csv('./Staging Areas/movdata/staging_hotspots_datatable.csv')
 
 ## Clean modeling dataframe
 
@@ -288,7 +284,7 @@ f2.ac <- rel.staging.occ ~ prop.forest.250 + prop.ag.1500 + AC.inverse + (1|subj
 f3.ac <- rel.staging.occ ~ prop.forest.250 + prop.ag.1500 + gHM + AC.inverse + (1|subject_name)
 f4.ac <- rel.staging.occ ~ prop.forest.250 + prop.ag.1500 + gHM + slope + AC.inverse + (1|subject_name)
 f5.ac <- rel.staging.occ ~ prop.forest.250 + prop.ag.1500 + gHM + slope + dist2paedge + AC.inverse + (1|subject_name)
-f6.ac <- rel.staging.occ ~ prop.forest.250 + prop.ag.1500 + gHM + slope + dist2paedge + drains250 + AC.inverse + (1|subject_name)
+f6.ac <- rel.staging.occ ~ prop.forest.250 + prop.ag.1500 + gHM + slope + dist2paedge + drains250 + AC.equal + (1|subject_name)
 f7.ac <- rel.staging.occ ~ prop.forest.250 + prop.ag.1500 + gHM + dist2paedge + AC.inverse + (1|subject_name)
 f8.ac <- rel.staging.occ ~ prop.forest.250 + slope + drains250 + AC.inverse + (1|subject_name)
 f9.ac <- rel.staging.occ ~ prop.ag.1500 + gHM + dist2paedge + AC.inverse + (1|subject_name) # very poor performance without forest
@@ -360,7 +356,7 @@ m11.ac <- glmer(f11.safety2.ac,
                 weights = log(occ.weights), # weights supplied as total counts that proportions arise from
                 data = hotspots,
                 family = binomial)
-summary(m11.ac)
+summary(m11.ac)sum
 
 # model table with AICc
 selection <- model.sel(list(m1.ac, m2.ac, m3.ac, m4.ac, m5.ac, m6.ac, m7.ac, m8.ac, m9.ac, m10.ac), rank = 'AICc')
@@ -378,40 +374,46 @@ plot_model(m6.ac, type = "pred", terms = 'prop.forest.250')
 plot_model(m6.ac, type = "pred", terms = 'gHM')
 plot_model(m6.ac, type = "pred", terms = "dist2paedge")
 
-##### Test Models by Subject Sex #####
-# results not included in paper
 
-male <- filter(hotspots, subject_sex == 'male')
-# update scaling for the subsetted dataset
-male$dist2paedge <- male$dist2paedge * attr(male$dist2paedge, 'scaled:scale') + attr(male$dist2paedge, 'scaled:center')
-male$dist2paedge <- scale(male$dist2paedge)
-male$slope <- male$slope * attr(male$slope, 'scaled:scale') + attr(male$slope, 'scaled:center')
-male$slope <- scale(male$slope)
-
-female <- filter(hotspots, subject_sex == 'female')
-# update scaling f or the subsetted dataset
-female$dist2paedge <- female$dist2paedge * attr(female$dist2paedge, 'scaled:scale') + attr(female$dist2paedge, 'scaled:center')
-female$dist2paedge <- scale(female$dist2paedge)
-female$slope <- female$slope * attr(female$slope, 'scaled:scale') + attr(female$slope, 'scaled:center')
-female$slope <- scale(female$slope)
-
-# fit top model from unisex testing
-m6.ac.male <- glmer(f6.ac, 
+f6 <- rel.staging.occ ~ prop.forest.250 + prop.ag.1500 + gHM + slope + dist2paedge + drains250 + (1|subject_name)
+m6 <- glmer(f6.ac, 
                weights = log(occ.weights), # weights supplied as total counts that proportions arise from
-               data = male,
+               data = hotspots,
                family = binomial)
-summary(m6.ac.male)
-
-# female
-m6.ac.female <- glmer(f6.ac, 
-                   weights = log(occ.weights), # weights supplied as total counts that proportions arise from
-                   data = female,
-                   family = binomial)
-summary(m6.ac.female)
+summary(m6)
 
 
-## Compare male and female models
-library(sjPlot)
-plot_models(m6.ac.male, m6.ac.female)
+# save top model
+#saveRDS(m6.ac, './Staging Areas/hotspots_hmm_m6.RDS')
+#m6.ac <- readRDS('./Staging Areas/hotspots_hmm_m6.RDS')
+
+##### Compare HMM and Tortuosity Models #####
+m6.ac.tor <- readRDS('./Staging Areas/hotspots_tor_m6.RDS')
+m6.ac.hmm <- readRDS('./Staging Areas/hotspots_hmm_m6.RDS')
+
+plot_models(m6.ac.hmm, m6.ac.tor, m.labels = c('Occurance of HMM-defined staging', 'Occurance of Tortuosity-defined staging'))
 
 
+##### Maps #####
+
+## map of staging and ag-use relocs
+# define staging and ag-day reloc datasets
+stage.relocs <- filter(used.df, vote.ag == 1) %>%
+  st_as_sf(coords = c('x','y'), crs = 32736)
+ag.relocs <- used.df %>% 
+  filter(vote.ag == 0 & ag.window.ext == 1) %>%
+  st_as_sf(coords = c('x','y'), crs = 32736) 
+
+# tmap
+library(tmap)
+stage.points.hmm <- tm_shape(gme) + tm_polygons(col = 'pa_status', palette = RColorBrewer::brewer.pal(3, 'Greens'), title = 'Protected Areas') +
+  tm_shape(ag.relocs) + tm_dots(size = 0.01, alpha = 0.03, col = '#FEE0D2') + # ag-day locs
+  tm_shape(stage.relocs) + tm_dots(size = 0.01, alpha = 0.02, col = '#DE2D26') + # staging locs 
+  # add manual legend for tm_dot layers
+  tm_add_legend(title = 'Agricultural Use Locations', type = 'symbol', labels = c('ag-day', 'staging'), col = c('#FEE0D2', '#DE2D26')) 
+# # add map title
+# tm_layout(main.title = 'Staging Relocations (HMM)',
+#           main.title.position = 'center')
+stage.points.hmm
+
+# tmap_save(stage.points.hmm, "Staging Relocs Map HMM 20220216.png", dpi = 300)
