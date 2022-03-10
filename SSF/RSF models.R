@@ -5,17 +5,18 @@ library(tidyverse)
 library(sjPlot)
 library(terra)
 library(sf)
+library(parallel)
 library(tictoc)
 
 set.seed(1)
 
 ##### 1a. Prepare Data #####
 
-# read data
+# read data - 25 elephants
 #movdata <- readRDS('./SSF/eledata_expanded.rds')
 movdata <- readRDS('./SSF/eledata_allmara.RDS')
 movdata <- movdata[!movdata$subject_name %in% c('Shamba','Courtney','David','Pepper'),]
-movdata <- movdata[!movdata$fixType != 'irregular',]
+movdata <- movdata[movdata$fixType != 'irregular',]
 
 # create date object
 movdata$date <- as.POSIXct(movdata$date) # check still in EAT
@@ -90,13 +91,14 @@ gHM <- rast("./spatial data/gHM_estes_32736_2020-05-12.tif")
 # 3 = cover2070
 # 4 = cover70
 # 5 = degraded
-lc <- rast("./spatial data/Tiedman/agmask_reclass.tif")
+#lc <- rast("./spatial data/Tiedman/agmask_reclass.tif") # maraonly
+lc <- rast("./spatial data/Tiedman/sentinel2018-3yr-GSE-02-2022_32736_agmask.tif") #SME - temp
 ag <- terra::clamp(lc, lower = 1, upper = 1, values = FALSE)
 cover20 <- terra::clamp(lc, lower = 2, upper = 2, values = FALSE)
 cover2070 <- terra::clamp(lc, lower = 3, upper = 3, values = FALSE)
 cover70 <- terra::clamp(lc, lower = 4, upper = 4, values = FALSE)
 
-#drains
+# drains
 # get shapefile for drains buffer
 drains <- st_read("./spatial data/drains/drains_estes_20211117/drains_estes_-2021-11-17.shp", 
                   layer="drains_estes_-2021-11-17", crs = 4326) %>%
@@ -170,7 +172,6 @@ rsf.ext$subject_name <- as.factor(rsf.ext$subject_name)
 
 m <- glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + gHM, data = rsf.ext, family = binomial)
 summary(m)
-
 m1 <- rsf.ext %>% fit_logit(case_ ~ ag + cover2070 + cover70 + slope + ndviCoV + drains + gHM)
 m2 <- rsf.ext %>% fit_logit(case_ ~ ag + cover70 + slope + ndviCoV + gHM)
 m3 <- rsf.ext %>% fit_logit(case_ ~ ag + prop.settlement.1500)
@@ -181,14 +182,14 @@ m5 <- rsf.ext %>% fit_logit(case_ ~ ag*cover70 + slope + ndviCoV + gHM)
 #               data = rsf.ext, family = binomial)
 
 library(MuMIn)
-tab <- model.sel(m$model, m1$model, m2$model, m3$model, m4$model, m5$model)
+tab <- model.sel(m, m1$model, m2$model, m3$model, m4$model, m5$model)
 View(tab)
 
 # check out the summary of top model
 summary(m)
 
 # viz the covariates
-#sjPlot::plot_model(m$model, transform = NULL, df_method='wald')
+#sjPlot::plot_model(m, transform = NULL, df_method='wald')
 
 
 ##### Fit Individual-level RSF #####

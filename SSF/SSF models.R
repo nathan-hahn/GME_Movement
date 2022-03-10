@@ -59,7 +59,7 @@ p %>% group_by(subject_name) %>% tally()
 
 ## make random steps for SSF and iSSF
 
-avail.steps = 10
+avail.steps = 15
 # get pop-level step length and turn angle distributions
 p <- do.call(rbind, t2)
 sl_distr = fit_distr(p$sl_, "gamma")
@@ -127,7 +127,7 @@ gHM <- rast("./spatial data/gHM_estes_32736_2020-05-12.tif")
 # 3 = cover2070
 # 4 = cover70
 # 5 = degraded
-lc <- rast("./spatial data/Tiedman/agmask_reclass.tif")
+lc <- rast("./spatial data/Tiedman/sentinel2018-3yr-GSE-02-2022_32736_agmask.tif") #SME - temp
 ag <- terra::clamp(lc, lower = 1, upper = 1, values = FALSE)
 cover20 <- terra::clamp(lc, lower = 2, upper = 2, values = FALSE)
 cover2070 <- terra::clamp(lc, lower = 3, upper = 3, values = FALSE)
