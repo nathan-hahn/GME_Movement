@@ -193,39 +193,7 @@ ssf.ext <- ssf.ext[ssf.ext$ndviCoV < 20,] # removes three major outliers from Ma
 summary(ssf.ext)
 unique(ssf.ext$subject_name)
 
-# drop old dataframes
-#remove(extract)
-#remove(used)
-#remove(ssf.sf)
 
-write.csv(ssf.ext, './SSF/ssf.df.allmara.IY_10.csv')
-#ssf.ext <- readRDS('./SSF/ssf.df.allmara.IY_10.RDS')
-
-##### Fit SSF Model #####
-#TODO: Add model selection code
-
-
-# m.ssf <- ssf.ext %>% amt::fit_clogit(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV +
-#                                      sl_ + log_sl_ + cos_ta_ + # movement parameters
-#                                      strata(step_id_))
-# 
-# m.ssf <- survival::clogit(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV +
-#                             sl_ + log_sl_ + cos_ta_ + strata(step_id_),
-#                           data = ssf.ext)
-# 
-# summary(m.ssf)
-
-
-
-##### Fit Individual SSFs #####
-
-# # test code
-# t <- amt::fit_issf(m.ind.ssf[[1]], case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV +
-#                 sl_ + log_sl_ + cos_ta_ + # movement parameters
-#                 strata(step_id_))
-# 
-# survival::clogit(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV +  
-#                    sl_ + log_sl_ + cos_ta_ + strata(step_id_), data = m.ind.ssf[[1]])
 
 
 # prep data - they do not interact with ag at all
@@ -239,6 +207,71 @@ t <- ssf.ext %>% group_by(subject_year, subject_name, subject_sex, tactic.season
 
 ssf.ext<- filter(ssf.ext, subject_year %in% t$subject_year)
 
+##### Add Ag Availability for Homerange #####
+## Ag availability by home range
+# 1. Calculate mcp homeranges
+# 2. Calculate proportion of ag within each homerange polygon
+# 3. Attach individual-year ag availability values to the dataset 
+
+df <- ssf.ext %>% ungroup() %>% filter(case_ == TRUE) %>% select(subject_year, x1_, y1_)
+sp::coordinates(df) <- ~x1_+y1_
+split <- split(df, df$subject_year)
+mcp <- lapply(split, function(x) {
+  x <- adehabitatHR::mcp(x)
+  x <- st_as_sf(x) %>%
+    terra::vect()
+  return(x)})
+
+# get mean ag in homerange (proportion 1/0)
+ag2 <- terra::classify(ag, cbind(NA, 0), right=FALSE)
+{tic()
+  cores = 6
+  ag.ext <- mclapply(mcp, function(x) terra::extract(ag2, x, fun = mean)[,2], mc.cores = cores)
+  toc()}
+
+ag.avail <- as.data.frame(do.call(rbind, ag.ext))
+ag.avail$subject_year <- rownames(ag.avail)
+colnames(ag.avail) <- c('ag.avail', 'subject_year')
+
+# merge results
+ssf.ext <- merge(ssf.ext, ag.avail, by = 'subject_year')
+
+# save results for later
+#write.csv(ag.avail, './SSF/ag.homerange.IY.datatable_20220312.csv')
+#write.csv(ssf.ext, './SSF/ssf.df.allmara.IY_10.csv')
+
+# drop old dataframes
+remove(extract)
+remove(used)
+remove(ssf.sf)
+remove(ag.ext)
+
+# load data - if needed
+ssf.ext <- as.data.frame(data.table::fread('./SSF/ssf.df.allmara.IY_10.csv'))
+ssf.ext$drains <- as.factor(ssf.ext$drains)
+ssf.ext$subject_year <- as.factor(ssf.ext$subject_year)
+ssf.ext$tactic.season <- as.factor(ssf.ext$tactic.season)
+ssf.ext$ag <- as.factor(ssf.ext$ag)
+ssf.ext$cover20 <- as.factor(ssf.ext$cover20)
+ssf.ext$cover2070 <- as.factor(ssf.ext$cover2070)
+ssf.ext$cover70 <- as.factor(ssf.ext$cover70)
+ssf.ext$V1 <- NULL
+
+##### Fit SSF Model #####
+#TODO: Add model selection code
+
+# m.ssf <- ssf.ext %>% amt::fit_clogit(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV +
+#                                      sl_ + log_sl_ + cos_ta_ + # movement parameters
+#                                      strata(step_id_))
+# 
+# m.ssf <- survival::clogit(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV +
+#                             sl_ + log_sl_ + cos_ta_ + strata(step_id_),
+#                           data = ssf.ext)
+# 
+# summary(m.ssf)
+
+##### Fit Individual SSFs #####
+
 ## Run in parallel 
 
 # fit model
@@ -246,34 +279,13 @@ ssf.ext<- filter(ssf.ext, subject_year %in% t$subject_year)
   cores = 6
   m.ind.ssf <- split(ssf.ext, ssf.ext$subject_year) # chose splitting variable (subject_name or subject_year)
   m.ind.ssf <- mclapply(m.ind.ssf, function(x) {
-    t <- amt::fit_issf(x, case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + scale(prop.settlement.1500) +
+    t <- amt::fit_issf(x, case_ ~ ag + cover20 + cover2070 + cover70 + drains + slope + ndviCoV + scale(prop.settlement.1500) +
                           log_sl_ + cos_ta_ + # movement parameters
                           strata(step_id_)) 
     t <- t$model }, # select only the model output
     mc.cores = cores)
   names(m.ind.ssf) <- unique(ssf.ext$subject_year) # chose splitting variable (subject_name or subject_year)
 toc()}
-
-m.ssf <- m.ind.ssf
-
-{tic()
-  cores = 6
-  m.ind.ssf <- split(ssf.ext, ssf.ext$subject_year) # chose splitting variable (subject_name or subject_year)
-  m.ind.ssf <- mclapply(m.ind.ssf, function(x) {
-    t <- amt::fit_issf(x, case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + scale(prop.settlement.1500) +
-                         log(sl_) + cos_ta_ + # movement parameters
-                         strata(step_id_))
-    t <- t$model }, # select only the model output
-    mc.cores = cores)
-  names(m.ind.ssf) <- unique(ssf.ext$subject_year) # chose splitting variable (subject_name or subject_year)
-  toc()}
-
-m.issf <- m.ind.ssf
-
-
-#m.functional
-
-m.ind.ssf <- m.ssf
 
 # get table of estimates for each individual
 id.est.ssf <- lapply(m.ind.ssf, function(x) 
@@ -315,3 +327,12 @@ ggplot(id.est.ssf, aes(x = as.factor(term), y = estimate, color = factor(tactic.
   xlab('covariate') + ggtitle('ssf individual-level estimates by ag tactic') +
   labs(color = 'ag tactic') + 
   coord_flip() 
+
+
+##### Model Function Response with Ag #####
+ag.est <- filter(id.est.ssf, term == 'ag1')
+plot(ag.est$ag.avail, ag.est$estimate)
+ag.est$ag.avail <- log(ag.est$ag.avail+0.0001)
+ag.est$subject_name <- as.factor(ag.est$subject_name)
+m.funct <- lme4::lmer(estimate ~ ag.avail + (1|subject_name), data = ag.est)
+sjPlot::plot_model(m.funct, type = 'pred', show.data = TRUE, title = '', axis.labels = '', dot.size = 1.5)
