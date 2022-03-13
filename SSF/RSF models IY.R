@@ -157,7 +157,7 @@ rsf.ext <- cbind(rsf.df, used)
 # scale some covariates before we fit it
 rsf.ext <- rsf.ext %>%
   mutate_at(.vars = c('slope', 'ndviCoV'), .funs = scale) %>%
-  #mutate_at(.vars = c('gHM','prop.settlement.250','prop.settlement.1500'), .funs = log)
+  #mutate_at(.vars = c('gHM','prop.settlement.250','prop.settlement.1500'), .funs = scale)
   mutate_at(.vars = c('ag','cover20','cover2070','cover70','drains'), .funs = function(x) if_else(!is.na(x), 1, 0)) %>%
   mutate_at(.vars = c('ag','cover20','cover2070','cover70', 'drains'), .funs = as.factor)
 
