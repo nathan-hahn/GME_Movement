@@ -8,6 +8,16 @@ library(sf)
 library(tictoc)
 library(parallel)
 
+theme_set(  theme_bw() + # set theme with no legend of strip text
+              theme(#panel.grid.major = element_blank(),
+                #panel.grid.minor = element_blank(), 
+                strip.background = element_blank(),
+                panel.border = element_rect(colour = "black"),
+                strip.text = element_text(size = 12),
+                legend.text = element_text(size = 10),
+                axis.line = element_line(colour = "black"), axis.title=element_text(size=14), axis.text = element_text(size=12))
+)
+
 set.seed(1)
 
 ##### 1a. Prepare Data #####
@@ -58,7 +68,7 @@ p %>% group_by(subject_year) %>% tally()
 
 ## make random steps for SSF and iSSF
 
-avail.steps = 10
+avail.steps = 2
 # get pop-level step length and turn angle distributions
 p <- do.call(rbind, t2)
 sl_distr = fit_distr(p$sl_, "gamma")
@@ -146,33 +156,49 @@ r.list <- list(slope, ndviCoV, ag, cover20, cover2070, cover70, drains, prop.set
 
 ## Extract
 
-# create terra vect object
+# create spatial object
 study.area <- 32736
 ssf.sf <- ssf.df %>%
-  ungroup() %>% select('x2_','y2_','uid') %>% # reduce number of columns to speed up vect() creation
-  st_as_sf(coords = c('x2_','y2_'), crs = study.area) %>% # specify here to extract at beginning (x1/y1) or end (x2/y2) of step
-  terra::vect() 
+  ungroup() %>% select('x2_','y2_','uid','subject_name') %>% # reduce number of columns to speed up vect() creation
+  st_as_sf(coords = c('x2_','y2_'), crs = study.area) # specify here to extract at beginning (x1/y1) or end (x2/y2) of step
 
-# extract in parallel - 1734 seconds with allmara dataset and 10 randpoints
+## Extraction in parallel 
+# create terra vect option - split up to avoid ram issues
+split <- split(ssf.sf, ssf.sf$subject_name)
+cores = 6
+used <- NULL
 {tic()
-  cores = 6
+for(i in 1:length(split)) {
+  # create vect
+  vect <- terra::vect(split[[i]])
   extract <- mclapply(r.list, function(x)
-    terra::extract(x, ssf.sf)[,2], mc.cores = cores)
-  used <- do.call(cbind, extract) # bind results into an extracted dataframe
-  toc()}
+    terra::extract(x, vect)[,2], mc.cores = cores)
+  used[[i]] <- do.call(cbind, extract) # bind results into an extracted dataframe
+}
+toc()}
+
+used2 <- do.call(rbind, used)
+
+# # extract in parallel - 1734 seconds with allmara dataset and 10 randpoints
+# {tic()
+#   cores = 6
+#   extract <- mclapply(r.list, function(x)
+#     terra::extract(x, ssf.sf)[,2], mc.cores = cores)
+#   used <- do.call(cbind, extract) # bind results into an extracted dataframe
+#   toc()}
 
 # check
-head(used)
-summary(used)
+head(used2)
+summary(used2)
 
 # create data frame
-mode(used) = "numeric"
-used <- as.data.frame(used)
-colnames(used) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains','prop.settlement.250','prop.settlement.1500','gHM')
-head(used)
+mode(used2) = "numeric"
+used <- as.data.frame(used2)
+colnames(used2) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains','prop.settlement.250','prop.settlement.1500','gHM')
+head(used2)
 
 # unstandardized data frame
-ssf.ext <- cbind(ssf.df, used)
+ssf.ext <- cbind(ssf.df, used2)
 
 # scale some covariates before we fit it
 ssf.ext <- ssf.ext %>%
@@ -193,8 +219,12 @@ ssf.ext <- ssf.ext[ssf.ext$ndviCoV < 20,] # removes three major outliers from Ma
 summary(ssf.ext)
 unique(ssf.ext$subject_name)
 
-
-
+# drop old dataframes
+remove(extract)
+remove(used)
+remove(used2)
+remove(ssf.sf)
+remove(ag.ext)
 
 # prep data - they do not interact with ag at all
 ssf.ext <- filter(ssf.ext, !(subject_year %in% c('Caroline-2014','Tressa-2015'))) # note added all chelsea back in
@@ -233,6 +263,17 @@ ag.avail <- as.data.frame(do.call(rbind, ag.ext))
 ag.avail$subject_year <- rownames(ag.avail)
 colnames(ag.avail) <- c('ag.avail', 'subject_year')
 
+# check correlation between ag availbilty and ag use (pct time in ag)
+pct.used <- ssf.ext %>%
+  filter(case_ == TRUE) %>%
+  group_by(subject_year) %>%
+  summarise(n = n(),
+            ag.used = sum(as.numeric(levels(ag)[ag])),
+            pct.ag.used = ag.used/n )
+
+t <- merge(ag.avail, pct.used, by = 'subject_year') 
+plot(t$pct.ag.used, plot(t$ag.avail))
+
 # merge results
 ssf.ext <- merge(ssf.ext, ag.avail, by = 'subject_year')
 
@@ -240,11 +281,6 @@ ssf.ext <- merge(ssf.ext, ag.avail, by = 'subject_year')
 #write.csv(ag.avail, './SSF/ag.homerange.IY.datatable_20220312.csv')
 #write.csv(ssf.ext, './SSF/ssf.df.allmara.IY_10.csv')
 
-# drop old dataframes
-remove(extract)
-remove(used)
-remove(ssf.sf)
-remove(ag.ext)
 
 # load data - if needed
 ssf.ext <- as.data.frame(data.table::fread('./SSF/ssf.df.allmara.IY_10.csv'))
@@ -260,10 +296,12 @@ ssf.ext$V1 <- NULL
 ##### Fit SSF Model #####
 #TODO: Add model selection code
 
-# m.ssf <- ssf.ext %>% amt::fit_clogit(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV +
-#                                      sl_ + log_sl_ + cos_ta_ + # movement parameters
-#                                      strata(step_id_))
-# 
+m.ssf <- ssf.ext %>% amt::fit_clogit(case_ ~ ag + cover20 + cover2070 + cover70 + slope + drains + ndviCoV +
+                                     sl_ + log_sl_ + cos_ta_ + # movement parameters
+                                     strata(step_id_))
+
+vif(m.ssf)
+
 # m.ssf <- survival::clogit(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV +
 #                             sl_ + log_sl_ + cos_ta_ + strata(step_id_),
 #                           data = ssf.ext)
@@ -297,7 +335,7 @@ id.est.ssf <- lapply(m.ind.ssf, function(x)
 id.est.ssf <- dplyr::bind_rows(id.est.ssf, .id = "subject_year")
 
 # add other ele metadata (sex, ag tactic, etc.)
-t <- ssf.ext %>% group_by(subject_year, subject_name, subject_sex, tactic.season) %>% tally() %>% dplyr::select(-n)
+t <- ssf.ext %>% group_by(subject_year, subject_name, subject_sex, tactic.season, ag.avail) %>% tally() %>% dplyr::select(-n)
 id.est.ssf <- merge(id.est.ssf, t, by = 'subject_year')
 
 ##### plot results #####
@@ -312,6 +350,8 @@ ggplot(tt, aes(x = as.factor(term), y = estimate, color = tactic.season)) +
   labs(color = 'ag tactic') + 
   coord_flip() + facet_wrap(~subject_name)
 
+ggsave('./SSF/ssf_invpanel_allmara.tiff')
+
 # coeff estimates by sex
 ggplot(id.est.ssf, aes(x = as.factor(term), y = estimate, color = subject_sex)) +
   geom_hline(yintercept = 0, linetype = 'dashed', color = 'grey') + 
@@ -319,6 +359,8 @@ ggplot(id.est.ssf, aes(x = as.factor(term), y = estimate, color = subject_sex)) 
   xlab('covariate') + ggtitle('ssf individual-level estimates by sex') +
   labs(color = 'sex') + 
   coord_flip()
+
+ggsave('./SSF/ssf_sex_allmara.tiff')
 
 # coeff estimates by tactic (aggregate)
 ggplot(id.est.ssf, aes(x = as.factor(term), y = estimate, color = factor(tactic.season))) +
@@ -328,6 +370,7 @@ ggplot(id.est.ssf, aes(x = as.factor(term), y = estimate, color = factor(tactic.
   labs(color = 'ag tactic') + 
   coord_flip() 
 
+ggsave('./SSF/ssf_agtactic_allmara.tiff')
 
 ##### Model Function Response with Ag #####
 ag.est <- filter(id.est.ssf, term == 'ag1')
