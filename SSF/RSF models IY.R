@@ -52,7 +52,7 @@ cores = 6
 
 # create random points 
 {tic()
-rand.factor = 10 # 5:1 unused:used
+rand.factor = 30 # 30:1 unused:used
 rsf.randpoints <- do.call(rbind, t1)
 rsf.randpoints <- split(rsf.randpoints, rsf.randpoints$subject_year) # split variable (subject_name or subject_year)
 rsf.randpoints <- parallel::mclapply(rsf.randpoints, function(x) {
@@ -78,6 +78,9 @@ rsf.df <- inner_join(x = t, y = rsf.df, by = 'subject_year') # subject_name or s
 # remove old dataframes
 remove(rsf.randpoints)
 remove(rsf.usedpoints)
+
+#write.csv(rsf.df, './SSF/rsf.30_1sample.csv')
+#rsf.df <- as.data.frame(data.table::fread('./SSF/rsf.30_1sample.csv'))
 
 ##### Covariate Extraction #####
 
@@ -113,46 +116,84 @@ cover70 <- terra::clamp(lc, lower = 4, upper = 4, values = FALSE)
 drains <- st_read("./spatial data/drains/drains_estes_20211117/drains_estes_-2021-11-17.shp", 
                   layer="drains_estes_-2021-11-17", crs = 4326) %>%
   st_transform(crs = 32736) %>%
-  filter(RIV_ORD <= 7)
+  filter(RIV_ORD <= 7) %>%
 # buffer by 250m
-drains <- st_buffer(drains, dist = 250) %>%
+  st_buffer(dist = 250) %>%
   st_union() %>%
   terra::vect() %>%
-  terra::rasterize(.,ag) # rasterize at 10m sentinel 
+  terra::rasterize(.,lc) # rasterize at 10m sentinel 
+
+# roads
+roadPrimary <- st_read("./spatial data/Roads landDx/road_primary_landDx.shp",
+                       layer="road_primary_landDx", crs = 32736) %>%
+  st_buffer(dist = 250) %>%
+  st_union() %>%
+  terra::vect() %>%
+  terra::rasterize(.,lc)
+roadSecondary <- st_read("./spatial data/Roads landDx/road_secondary_landDx.shp",
+                       layer="road_secondary_landDx", crs = 32736) %>%
+  st_buffer(dist = 250) %>%
+  st_union() %>%
+  terra::vect() %>%
+  terra::rasterize(.,lc)
 
 
 ## Create covariate list
 # rasters must be in a list for mcapply
-r.list <- list(slope, ndviCoV, ag, cover20, cover2070, cover70, drains, prop.settlement.250, prop.settlement.1500, gHM)
+r.list <- list(slope, ndviCoV, ag, cover20, cover2070, cover70, drains, prop.settlement.250, prop.settlement.1500, gHM, roadPrimary, roadSecondary)
 
 ## Extract
-
-# create terra vect object
 study.area <- 32736
 rsf.sf <- rsf.df %>%
-  st_as_sf(coords = c('x_','y_'), crs = study.area) %>%
-  terra::vect() 
+  st_as_sf(coords = c('x_','y_'), crs = study.area)
 
-# extract in parallel - 212 seconds with allmara dataset
+## Extraction in parallel - 1050 seconds
+# create terra vect option - split up to avoid ram issues
+split <- split(rsf.sf, rsf.sf$subject_name)
+remove(rsf.sf)
+cores = 7
+used <- NULL
 {tic()
-  cores = 6
-  extract <- mclapply(r.list, function(x)
-    terra::extract(x, rsf.sf)[,2], mc.cores = cores)
-  used <- do.call(cbind, extract) # bind results into an extracted dataframe
+  for(i in 1:length(split)) {
+    # create vect
+    vect <- terra::vect(split[[i]])
+    extract <- mclapply(r.list, function(x)
+      terra::extract(x, vect)[,2], mc.cores = cores)
+    used[[i]] <- do.call(cbind, extract) # bind results into an extracted dataframe
+  }
 toc()}
 
+used2 <- do.call(rbind, used)
+write.csv(used2, 'SSF/rsf.30_1sample.extract.csv')
+
+# 
+# 
+# # create terra vect object
+# study.area <- 32736
+# rsf.sf <- rsf.df %>%
+#   st_as_sf(coords = c('x_','y_'), crs = study.area) %>%
+#   terra::vect() 
+# 
+# # extract in parallel - 212 seconds with allmara dataset
+# {tic()
+#   cores = 6
+#   extract <- mclapply(r.list, function(x)
+#     terra::extract(x, rsf.sf)[,2], mc.cores = cores)
+#   used <- do.call(cbind, extract) # bind results into an extracted dataframe
+# toc()}
+
 # check
-head(used)
-summary(used)
+head(used2)
+summary(used2)
 
 # create data frame
-mode(used) = "numeric"
-used <- as.data.frame(used)
-colnames(used) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains','prop.settlement.250','prop.settlement.1500','gHM')
-head(used)
+mode(used2) = "numeric"
+used <- as.data.frame(used2)
+colnames(used2) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains','prop.settlement.250','prop.settlement.1500','gHM','roadPrimary','roadSecondary')
+head(used2)
 
 # unstandardized data frame
-rsf.ext <- cbind(rsf.df, used)
+rsf.ext <- cbind(rsf.df, used2)
 
 # scale some covariates before we fit it
 rsf.ext <- rsf.ext %>%
@@ -170,19 +211,33 @@ rsf.ext <- rsf.ext[rsf.ext$ndviCoV < 20,] # removes three major outliers from Ma
 
 summary(rsf.ext)
 
+tt <- filter(rsf.ext, subject_year == 'Ivy-2018')
+dim(tt)
+
+# # save used df
+#write.csv(rsf.ext, './SSF/rsf.df.allmara.IY.30.csv')
+rsf.ext <- as.data.frame(data.table::fread('./SSF/rsf.df.allmara.IY.30.csv'))
+rsf.ext$drains <- as.factor(rsf.ext$drains)
+rsf.ext$subject_year <- as.character(rsf.ext$subject_year)
+rsf.ext$tactic.season <- as.factor(rsf.ext$tactic.season)
+rsf.ext$ag <- as.factor(rsf.ext$ag)
+rsf.ext$cover20 <- as.factor(rsf.ext$cover20)
+rsf.ext$cover2070 <- as.factor(rsf.ext$cover2070)
+rsf.ext$cover70 <- as.factor(rsf.ext$cover70)
+rsf.ext$V1 <- NULL
+
 # drop old dataframes
 remove(extract)
 remove(used)
 remove(rsf.df)
 remove(rsf.sf)
 remove(r.list)
+#remove(used2)
 
-tt <- filter(rsf.ext, subject_year == 'Ivy-2018')
-dim(tt)
 
-# # save used df
-#saveRDS(rsf.ext, './SSF/rsf.df.allmara.IY.RDS')
-rsf.ext <- readRDS('./SSF/rsf.df.allmara.IY.RDS')
+
+
+
 
 ##### Add Ag Availability for Homerange
 ## Ag availability by home range
@@ -231,32 +286,32 @@ rsf.ext<- filter(rsf.ext, subject_year %in% t$subject_year)
 rsf.ext <- filter(rsf.ext, !(subject_year %in% c('Caroline-2014','Tressa-2015','Chelsea-2016')))
 
 
-# fit pop model
-m <- glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(gHM), data = rsf.ext, family = binomial)
-summary(m)
-m1 <- rsf.ext %>% fit_logit(case_ ~ ag + cover2070 + cover70 + slope + ndviCoV + drains + gHM)
-m2 <- rsf.ext %>% fit_logit(case_ ~ ag + cover70 + slope + ndviCoV + gHM)
-m3 <- rsf.ext %>% fit_logit(case_ ~ ag + prop.settlement.1500)
-m4 <- rsf.ext %>% fit_logit(case_ ~ cover20 + cover2070 + cover70 + slope + ndviCoV + drains)
-m5 <- rsf.ext %>% fit_logit(case_ ~ ag*cover70 + slope + ndviCoV + gHM)
-m.250 <- glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(prop.settlement.250), data = rsf.ext, family = binomial)
-m.1500 <- glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(prop.settlement.1500), data = rsf.ext, family = binomial)
-
-tab <- model.sel(m, m.250, m.1500)
-tab
-
-# m.rsf <- glmer(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + (1|subject_name),
-#               data = rsf.ext, family = binomial)
-
-library(MuMIn)
-tab <- model.sel(m, m1$model, m2$model, m3$model, m4$model, m5$model)
-View(tab)
-
-# check out the summary of top model
-summary(m)
-
-# viz the covariates
-#sjPlot::plot_model(m, transform = NULL, df_method='wald')
+# # fit pop model
+# m <- glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(gHM), data = rsf.ext, family = binomial)
+# summary(m)
+# m1 <- rsf.ext %>% fit_logit(case_ ~ ag + cover2070 + cover70 + slope + ndviCoV + drains + gHM)
+# m2 <- rsf.ext %>% fit_logit(case_ ~ ag + cover70 + slope + ndviCoV + gHM)
+# m3 <- rsf.ext %>% fit_logit(case_ ~ ag + prop.settlement.1500)
+# m4 <- rsf.ext %>% fit_logit(case_ ~ cover20 + cover2070 + cover70 + slope + ndviCoV + drains)
+# m5 <- rsf.ext %>% fit_logit(case_ ~ ag*cover70 + slope + ndviCoV + gHM)
+# m.250 <- glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(prop.settlement.250), data = rsf.ext, family = binomial)
+# m.1500 <- glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(prop.settlement.1500), data = rsf.ext, family = binomial)
+# 
+# tab <- model.sel(m, m.250, m.1500)
+# tab
+# 
+# # m.rsf <- glmer(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + (1|subject_name),
+# #               data = rsf.ext, family = binomial)
+# 
+# library(MuMIn)
+# tab <- model.sel(m, m1$model, m2$model, m3$model, m4$model, m5$model, m.250, m.1500)
+# View(tab)
+# 
+# # check out the summary of top model
+# summary(m)
+# 
+# # viz the covariates
+# #sjPlot::plot_model(m, transform = NULL, df_method='wald')
 
 
 ##### Fit Individual-level RSF #####
@@ -265,29 +320,12 @@ summary(m)
 {tic()
   cores = 6
   m.ind.rsf <- split(rsf.ext, rsf.ext$subject_year) # subject_name or subject_year
-  m.ind.rsf <- mclapply(m.ind.rsf, function(x) 
-    glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(prop.settlement.1500), data = x, family = 'binomial'), 
+  m.ind.rsf <- mclapply(m.ind.rsf, function(x)
+    glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(prop.settlement.250), data = x, family = 'binomial'),
     mc.cores = cores)
   names(m.ind.rsf) <- unique(rsf.ext$subject_year)
 toc()}
 
-m.rsf <- m.ind.rsf
-
-{tic()
-  cores = 6
-  m.ind.rsf <- split(rsf.ext, rsf.ext$subject_year) # subject_name or subject_year
-  m.ind.rsf <- mclapply(m.ind.rsf, function(x) 
-    glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(prop.settlement.1500) + ag.avail, data = x, family = 'binomial'), 
-    mc.cores = cores)
-  names(m.ind.rsf) <- unique(rsf.ext$subject_year)
-  toc()}
-
-t <- glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(prop.settlement.1500) + ag.avail, 
-    data = m.ind.rsf$`Olchoda-2016`, family = 'binomial')
-
-m.func.rsf <- m.ind.rsf
-
-m.ind.rsf <- m.rsf
 # get table of estimates for each individual
 id.est.rsf <- lapply(m.ind.rsf, function(x) 
   tab <- x %>% broom::tidy() %>%
