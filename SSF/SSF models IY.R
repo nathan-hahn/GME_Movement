@@ -124,6 +124,11 @@ ndviCoV <- rast('./spatial data/NDVICoV_estes_32736-2022-02-03.tif')
 prop.settlement.250 <- rast("spatial data/estes_settlement_pct_250.tif")
 prop.settlement.1500 <- rast("spatial data/estes_settlement_pct_1500.tif")
 gHM <- rast("./spatial data/gHM_estes_32736_2020-05-12.tif")
+roadsPrimary <- rast("./spatial data/Roads landDx/roads_primary_landDx.tif")
+roadsSecondary <- rast("./spatial data/Roads landDx/roads_secondary_landDx.tif")
+dist2roads.primary <- rast("./spatial data/Roads landDx/dist2roads_primary_landDx.tif")
+dist2roads.secondary <- rast("./spatial data/Roads landDx/dist2roads_secondary_landDx.tif")
+
 
 # tiedman layer
 # 1 = ag
@@ -149,24 +154,13 @@ drains <- st_buffer(drains, dist = 250) %>%
   terra::vect() %>%
   terra::rasterize(.,ag) # rasterize at 10m sentinel 
 
-# roads
-roadPrimary <- st_read("./spatial data/Roads landDx/road_primary_landDx.shp",
-                       layer="road_primary_landDx", crs = 32736) %>%
-  st_buffer(dist = 250) %>%
-  st_union() %>%
-  terra::vect() %>%
-  terra::rasterize(.,lc)
-roadSecondary <- st_read("./spatial data/Roads landDx/road_secondary_landDx.shp",
-                         layer="road_secondary_landDx", crs = 32736) %>%
-  st_buffer(dist = 250) %>%
-  st_union() %>%
-  terra::vect() %>%
-  terra::rasterize(.,lc)
 
 
 ## Create covariate list
 # rasters must be in a list for mcapply
-r.list <- list(slope, ndviCoV, ag, cover20, cover2070, cover70, drains, prop.settlement.250, prop.settlement.1500, gHM, roadPrimary, roadSecondary)
+r.list <- list(slope, ndviCoV, ag, cover20, cover2070, cover70, drains, 
+               prop.settlement.250, prop.settlement.1500, gHM, 
+               roadPrimary, roadSecondary, dist2roads.primary, dist2roads.secondary)
 
 ## Extract
 
@@ -208,7 +202,7 @@ summary(used2)
 # create data frame
 mode(used2) = "numeric"
 used <- as.data.frame(used2)
-colnames(used2) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains','prop.settlement.250','prop.settlement.1500','gHM','roadPrimary','roadSecondary')
+colnames(used2) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains','prop.settlement.250','prop.settlement.1500','gHM','roadPrimary','roadSecondary','dist2roads.primary','dist2roads.secondary')
 head(used2)
 
 # unstandardized data frame
