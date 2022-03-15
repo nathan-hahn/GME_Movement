@@ -68,7 +68,7 @@ p %>% group_by(subject_year) %>% tally()
 
 ## make random steps for SSF and iSSF
 
-avail.steps = 2
+avail.steps = 15
 # get pop-level step length and turn angle distributions
 p <- do.call(rbind, t2)
 sl_distr = fit_distr(p$sl_, "gamma")
@@ -76,7 +76,7 @@ ta_distr = fit_distr(p$ta_, "vonmises")
 
 # create random steps ~ xx seconds for allmara dataset!!
 {tic()
-  cores = 6
+  cores = 7
   ssf.randsteps <- parallel::mclapply(t2, function(x) {
     set.seed(1)
     x %>% random_steps(n_control = avail.steps, 
@@ -149,10 +149,24 @@ drains <- st_buffer(drains, dist = 250) %>%
   terra::vect() %>%
   terra::rasterize(.,ag) # rasterize at 10m sentinel 
 
+# roads
+roadPrimary <- st_read("./spatial data/Roads landDx/road_primary_landDx.shp",
+                       layer="road_primary_landDx", crs = 32736) %>%
+  st_buffer(dist = 250) %>%
+  st_union() %>%
+  terra::vect() %>%
+  terra::rasterize(.,lc)
+roadSecondary <- st_read("./spatial data/Roads landDx/road_secondary_landDx.shp",
+                         layer="road_secondary_landDx", crs = 32736) %>%
+  st_buffer(dist = 250) %>%
+  st_union() %>%
+  terra::vect() %>%
+  terra::rasterize(.,lc)
+
 
 ## Create covariate list
 # rasters must be in a list for mcapply
-r.list <- list(slope, ndviCoV, ag, cover20, cover2070, cover70, drains, prop.settlement.250, prop.settlement.1500, gHM)
+r.list <- list(slope, ndviCoV, ag, cover20, cover2070, cover70, drains, prop.settlement.250, prop.settlement.1500, gHM, roadPrimary, roadSecondary)
 
 ## Extract
 
@@ -194,7 +208,7 @@ summary(used2)
 # create data frame
 mode(used2) = "numeric"
 used <- as.data.frame(used2)
-colnames(used2) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains','prop.settlement.250','prop.settlement.1500','gHM')
+colnames(used2) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains','prop.settlement.250','prop.settlement.1500','gHM','roadPrimary','roadSecondary')
 head(used2)
 
 # unstandardized data frame
