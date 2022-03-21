@@ -28,7 +28,7 @@ set.seed(1)
 movdata <- readRDS('./SSF/eledata_allmara.RDS')
 movdata <- movdata[!movdata$subject_name %in% c('Shamba','Courtney','David','Pepper'),]
 movdata <- movdata[movdata$fixType != 'irregular',]
-
+movdata$uid <- 1:nrow(movdata)
 # create date object
 movdata$date <- as.POSIXct(movdata$date) # check still in EAT
 
@@ -37,8 +37,8 @@ movdata$subject_year <- paste(movdata$subject_name, movdata$year.cuts, sep = '-'
 
 # make a move object for the amt package - we will use the id, which is a
 #         combination of the animal's name and collar number
-track <- make_track(movdata, .x = x, .y = y, .t = date, id = id, subject_name = subject_name, subject_year = subject_year)
-t1 <- split(track, track$id)
+track <- make_track(movdata, .x = x, .y = y, .t = date, subject_name = subject_name, subject_year = subject_year, subject_sex = subject_sex, tactic.season = tactic.season, uid = uid)
+t1 <- split(track, track$subject_year) # subject_name or subject_year
 
 ##### 1b. Generate random samples #####
 #' We will use amt functions to make random samples for our models. First, we will generate random points for the rsf
@@ -60,20 +60,22 @@ rsf.randpoints <- parallel::mclapply(rsf.randpoints, function(x) {
   rp <- x %>% amt::random_points(n = nrow(.)*rand.factor, hr = 'mcp') # 
   rp$subject_name = unique(x$subject_name)
   rp$subject_year = unique(x$subject_year) # update this by the split variable
+  rp$subject_sex = unique(x$subject_sex)
+  rp$tactic.season = unique(x$tactic.season)
   return(rp) }, mc.cores = cores)
 toc()}
 
 # create dataframe for used points
 rsf.usedpoints <- lapply(t1, function(x)
-  x %>% mutate(case_ = 'TRUE') %>% select(c(case_, x_, y_, subject_name, subject_year))) # signify our used points using the amt 'case' nomenclature
+  x %>% mutate(case_ = 'TRUE') %>% select(c(case_, x_, y_, subject_name, subject_year, subject_sex, tactic.season))) # signify our used points using the amt 'case' nomenclature
 
 # create a single dataframe
 rsf.randpoints <- do.call(rbind, rsf.randpoints)
 rsf.usedpoints <- do.call(rbind, rsf.usedpoints)
 rsf.df <- rbind(rsf.randpoints, rsf.usedpoints)
 
-t <- movdata %>% group_by(subject_year, subject_name, subject_sex, tactic.agg) %>% tally() %>% dplyr::select(-c(n))
-rsf.df <- inner_join(x = t, y = rsf.df, by = 'subject_year') # subject_name or subject_year
+# t <- movdata %>% group_by(subject_year, subject_name, subject_sex, tactic.agg) %>% tally() %>% dplyr::select(-c(n))
+# rsf.df <- inner_join(x = t, y = rsf.df, by = 'subject_year') # subject_name or subject_year
 
 # remove old dataframes
 remove(rsf.randpoints)
@@ -97,10 +99,10 @@ ndviCoV <- rast('./spatial data/NDVICoV_estes_32736-2022-02-03.tif')
 prop.settlement.250 <- rast("spatial data/estes_settlement_pct_250.tif")
 prop.settlement.1500 <- rast("spatial data/estes_settlement_pct_1500.tif")
 gHM <- rast("./spatial data/gHM_estes_32736_2020-05-12.tif")
-roadsPrimary <- rast("./spatial data/Roads landDx/roads_primary_landDx.tif")
-roadsSecondary <- rast("./spatial data/Roads landDx/roads_secondary_landDx.tif")
-dist2roads.primary <- rast("./spatial data/Roads landDx/dist2roads_primary_landDx.tif")
-dist2roads.secondary <- rast("./spatial data/Roads landDx/dist2roads_secondary_landDx.tif")
+roadsPrimary <- rast("./spatial data/Roads landDx/road_primary_landDx.tif")
+roadsSecondary <- rast("./spatial data/Roads landDx/road_secondary_landDx.tif")
+dist2roads.primary <- rast("./spatial data/Roads landDx/dist2road_primary_landDx.tif")
+dist2roads.secondary <- rast("./spatial data/Roads landDx/dist2road_secondary_landDx.tif")
 
 # tiedman layer
 # 1 = ag
@@ -132,7 +134,7 @@ drains <- st_read("./spatial data/drains/drains_estes_20211117/drains_estes_-202
 # rasters must be in a list for mcapply
 r.list <- list(slope, ndviCoV, ag, cover20, cover2070, cover70, drains, 
                prop.settlement.250, prop.settlement.1500, gHM, 
-               roadPrimary, roadSecondary, dist2roads.primary, dist2roads.secondary)
+               roadsPrimary, roadsSecondary, dist2roads.primary, dist2roads.secondary)
 ## Extract
 study.area <- 32736
 rsf.sf <- rsf.df %>%
@@ -142,7 +144,7 @@ rsf.sf <- rsf.df %>%
 # create terra vect option - split up to avoid ram issues
 split <- split(rsf.sf, rsf.sf$subject_name)
 remove(rsf.sf)
-cores = 7
+cores = 6
 used <- NULL
 {tic()
   for(i in 1:length(split)) {
@@ -155,23 +157,8 @@ used <- NULL
 toc()}
 
 used2 <- do.call(rbind, used)
-write.csv(used2, 'SSF/rsf.30_1sample.extract.csv')
-
-# 
-# 
-# # create terra vect object
-# study.area <- 32736
-# rsf.sf <- rsf.df %>%
-#   st_as_sf(coords = c('x_','y_'), crs = study.area) %>%
-#   terra::vect() 
-# 
-# # extract in parallel - 212 seconds with allmara dataset
-# {tic()
-#   cores = 6
-#   extract <- mclapply(r.list, function(x)
-#     terra::extract(x, rsf.sf)[,2], mc.cores = cores)
-#   used <- do.call(cbind, extract) # bind results into an extracted dataframe
-# toc()}
+#write.csv(used2, 'SSF/rsf.30_1sample.extract_20220316.csv')
+#used2 <- as.matrix(data.table::fread('SSF/rsf.30_1sample.extract_20220316.csv'))
 
 # check
 head(used2)
@@ -179,8 +166,8 @@ summary(used2)
 
 # create data frame
 mode(used2) = "numeric"
-used <- as.data.frame(used2)
-colnames(used2) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains','prop.settlement.250','prop.settlement.1500','gHM','roadPrimary','roadSecondary','dist2roads.primary','dist2roads.secondary')
+used2 <- as.data.frame(used2)
+colnames(used2) <- c('V1','slope','ndviCoV','ag','cover20','cover2070','cover70','drains','prop.settlement.250','prop.settlement.1500','gHM','roadsPrimary','roadsSecondary','dist2roads.primary','dist2roads.secondary')
 head(used2)
 
 # unstandardized data frame
@@ -205,31 +192,6 @@ summary(rsf.ext)
 tt <- filter(rsf.ext, subject_year == 'Ivy-2018')
 dim(tt)
 
-# # save used df
-#write.csv(rsf.ext, './SSF/rsf.df.allmara.IY.30.csv')
-rsf.ext <- as.data.frame(data.table::fread('./SSF/rsf.df.allmara.IY.30.csv'))
-rsf.ext$drains <- as.factor(rsf.ext$drains)
-rsf.ext$subject_year <- as.character(rsf.ext$subject_year)
-rsf.ext$tactic.season <- as.factor(rsf.ext$tactic.season)
-rsf.ext$ag <- as.factor(rsf.ext$ag)
-rsf.ext$cover20 <- as.factor(rsf.ext$cover20)
-rsf.ext$cover2070 <- as.factor(rsf.ext$cover2070)
-rsf.ext$cover70 <- as.factor(rsf.ext$cover70)
-rsf.ext$V1 <- NULL
-
-# drop old dataframes
-remove(extract)
-remove(used)
-remove(rsf.df)
-remove(rsf.sf)
-remove(r.list)
-#remove(used2)
-
-
-
-
-
-
 ##### Add Ag Availability for Homerange
 ## Ag availability by home range
 # 1. Calculate mcp homeranges
@@ -251,13 +213,38 @@ ext <- terra::extract(ag2, mcp[[2]], fun = mean)
 {tic()
   cores = 6
   ag.ext <- mclapply(mcp, function(x) terra::extract(ag2, x, fun = mean))[,2]
-toc()}
+  toc()}
 
 t <- as.data.frame(do.call(rbind, ag.ext))
 t$subject_year <- rownames(t)
 colnames(t) <- c('ag.avail', 'subject_year')
 
+
+t <- read.csv('./SSF/ag.homerange.IY.datatable_20220312.csv')
+
 rsf.ext <- merge(rsf.ext, t, by = 'subject_year')
+
+# save used df
+write.csv(rsf.ext, './SSF/rsf.df.allmara.IY.30_20220321.csv')
+
+# rsf.ext <- as.data.frame(data.table::fread('./SSF/rsf.df.allmara.IY.30.csv'))
+# rsf.ext$drains <- as.factor(rsf.ext$drains)
+# rsf.ext$subject_year <- as.character(rsf.ext$subject_year)
+# rsf.ext$tactic.season <- as.factor(rsf.ext$tactic.season)
+# rsf.ext$ag <- as.factor(rsf.ext$ag)
+# rsf.ext$cover20 <- as.factor(rsf.ext$cover20)
+# rsf.ext$cover2070 <- as.factor(rsf.ext$cover2070)
+# rsf.ext$cover70 <- as.factor(rsf.ext$cover70)
+# rsf.ext$V1 <- NULL
+
+# drop old dataframes
+remove(extract)
+remove(used)
+remove(rsf.df)
+remove(rsf.sf)
+remove(r.list)
+remove(used2)
+
 
 ##### Fit Population-Level RSF Model #####
 #' To make things simple, we are going to forego model selection and fit the same model for each of the RSF, SSF, and 
