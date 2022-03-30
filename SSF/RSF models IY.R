@@ -96,6 +96,10 @@ roadsSecondary <- rast("./spatial data/Roads landDx/road_secondary_landDx.tif")
 dist2roads.primary <- rast("./spatial data/Roads landDx/dist2road_primary_landDx.tif")
 dist2roads.secondary <- rast("./spatial data/Roads landDx/dist2road_secondary_landDx.tif")
 dist2ag <- rast("./spatial data/Tiedman/dist2ag_tiedman.tif")
+dist2paedge <- rast("./spatial data/dist2paedge_estes_32736_20211118.tif")
+dist2pa <- rast("./spatial data/GSE/GSE distance rasters/dist2protected_estes_32736.tif")
+dist2lu <- rast("./spatial data/GSE/GSE distance rasters/dist2limiteduse_estes_32736.tif")
+dist2up <- rast("./spatial data/GSE/GSE distance rasters/dist2unprotected_estes_32736.tif")
 
 # tiedman layer
 # 1 = ag
@@ -104,7 +108,7 @@ dist2ag <- rast("./spatial data/Tiedman/dist2ag_tiedman.tif")
 # 4 = cover70
 # 5 = degraded
 #lc <- rast("./spatial data/Tiedman/agmask_reclass.tif") # maraonly
-lc <- rast("./spatial data/Tiedman/sentinel2018-3yr-GSE-02-2022_32736_agmask.tif") #SME - temp
+lc <- rast("./spatial data/Tiedman/sentinel2018-3yr-GSE-03-2022_32736_agmask.tif") #SME - temp
 ag <- terra::clamp(lc, lower = 1, upper = 1, values = FALSE)
 cover20 <- terra::clamp(lc, lower = 2, upper = 2, values = FALSE)
 cover2070 <- terra::clamp(lc, lower = 3, upper = 3, values = FALSE)
@@ -122,12 +126,21 @@ drains <- st_read("./spatial data/drains/drains_estes_20211117/drains_estes_-202
   terra::vect() %>%
   terra::rasterize(.,lc) # rasterize at 10m sentinel 
 
+# pa (factor)
+# Needs to potentially be updated a bit based on KS email responses 
+pa <- st_read('./spatial data/GSE/GSEv_undissolved_temp_32736.shp') %>%
+  terra::vect()
+# rasterize mask layer
+landuse <- terra::rasterize(pa, slope, field = 'pa_level') 
+# NA to 1 (unprotected land)
+landuse[is.na(landuse)] <- 1
 
 ## Create covariate list
 # rasters must be in a list for mcapply
 r.list <- list(slope, ndviCoV, ag, cover20, cover2070, cover70, drains, 
                prop.settlement.250, prop.settlement.1500, gHM, 
-               roadsPrimary, roadsSecondary, dist2roads.primary, dist2roads.secondary, dist2ag)
+               roadsPrimary, roadsSecondary, dist2roads.primary, dist2roads.secondary, dist2ag, dist2paedge, dist2pa, dist2lu, dist2up, landuse)
+
 ## Extract
 study.area <- 32736
 
@@ -142,9 +155,9 @@ used <- NULL
     vect <- split[[i]] %>% 
       st_as_sf(coords = c('x_','y_'), crs = study.area) %>%
       terra::vect()
-    extract <- mclapply(r.list, function(x)
+    r.extract <- mclapply(r.list, function(x)
       terra::extract(x, vect)[,2], mc.cores = cores)
-    used[[i]] <- do.call(cbind, extract) # bind results into an extracted dataframe for each individual
+    used[[i]] <- do.call(cbind, r.extract) # bind results into an extracted dataframe for each individual
   }
 toc()}
 
@@ -157,11 +170,22 @@ summary(used2)
 # create data frame
 mode(used2) = "numeric"
 used2 <- as.data.frame(used2)
-colnames(used2) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains','prop.settlement.250','prop.settlement.1500','gHM','roadsPrimary','roadsSecondary','dist2roads.primary','dist2roads.secondary','dist2ag')
+colnames(used2) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains',
+                     'prop.settlement.250','prop.settlement.1500','gHM',
+                     'roadsPrimary','roadsSecondary','dist2roads.primary','dist2roads.secondary','dist2ag',
+                     'dist2paedge', 'dist2pa', 'dist2lu', 'dist2up', 'landuse')
 head(used2)
 
 # unstandardized data frame
 rsf.ext <- cbind(rsf.df, used2)
+
+## Adjust dist2edge metrics
+rsf.ext$dist2paedge <- ifelse(rsf.ext$landuse > 1, rsf.ext$dist2paedge, -rsf.ext$dist2paedge)
+rsf.ext$dist2pa <- ifelse(rsf.ext$landuse == 3, rsf.ext$dist2pa, -rsf.ext$dist2pa)
+rsf.ext$dist2lu <- ifelse(rsf.ext$landuse == 2, rsf.ext$dist2lu, -rsf.ext$dist2lu)
+rsf.ext$dist2up <- ifelse(rsf.ext$landuse == 1, rsf.ext$dist2up, -rsf.ext$dist2up)
+
+
 
 # ##### Add Ag Availability for Homerange
 # ## Ag availability by home range
@@ -188,8 +212,8 @@ rsf.ext <- cbind(rsf.df, used2)
 # t <- as.data.frame(do.call(rbind, ag.ext))
 # t$subject_year <- rownames(t)
 # colnames(t) <- c('ag.avail', 'subject_year')
-
-write.csv(t, './SSF/ag.homerange.IY.datatable_20220312.csv', row.names = FALSE)
+# 
+# write.csv(t, './SSF/ag.homerange.IY.datatable_20220312.csv', row.names = FALSE)
 
 # read in ag available table
 t <- read.csv('./SSF/ag.homerange.IY.datatable_20220312.csv')
@@ -197,7 +221,7 @@ t <- read.csv('./SSF/ag.homerange.IY.datatable_20220312.csv')
 rsf.ext <- merge(rsf.ext, t, by = 'subject_year') 
 
 # save extracted df
-write.csv(rsf.ext, './SSF/RSF_dataset_extracted_20220325.csv')
+write.csv(rsf.ext, './SSF/RSF_dataset_extracted_20220330.csv')
 
 # drop old dataframes
 remove(extract)
