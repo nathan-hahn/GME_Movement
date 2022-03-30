@@ -88,8 +88,8 @@ prop.ag <- rast("./spatial data/Estes_ag_pct_1500.tif")
 prop.forest <- rast("./spatial data/hansen_forest_pct_250.tif")		
 slope <- rast('./spatial data/slope_estes_32736_2020-05-12.tif')
 ndviCoV <- rast('./spatial data/NDVICoV_estes_32736-2022-02-03.tif')
-prop.settlement.250 <- rast("spatial data/estes_settlement_pct_250.tif")
-prop.settlement.1500 <- rast("spatial data/estes_settlement_pct_1500.tif")
+prop.settlement.250 <- rast("spatial data/google settlements/estes_settlement_pct_250.tif")
+prop.settlement.1500 <- rast("spatial data/google settlements/estes_settlement_pct_1500.tif")
 gHM <- rast("./spatial data/gHM_estes_32736_2020-05-12.tif")
 roadsPrimary <- rast("./spatial data/Roads landDx/road_primary_landDx.tif")
 roadsSecondary <- rast("./spatial data/Roads landDx/road_secondary_landDx.tif")
@@ -285,7 +285,7 @@ rsf.ext <- filter(rsf.ext, !(subject_year %in% c('Caroline-2014','Tressa-2015','
 toc()}
 
 remove(split)
-#saveRDS(m.ind.rsf, paste0('./SSF/RSF_modfit_', region,'_20220325.RDS'))
+saveRDS(m.ind.rsf, paste0('./SSF/RSF_modfit_20220325.RDS'))
 
 # get table of estimates for each individual
 id.est.rsf <- lapply(m.ind.rsf, function(x) 
@@ -301,7 +301,7 @@ id.est.rsf <- dplyr::bind_rows(id.est.rsf, .id = "subject_year")
 t <- rsf.ext %>% group_by(subject_year, subject_name, subject_sex, tactic.season, ag.avail) %>% tally() %>% dplyr::select(-n)
 id.est.rsf <- merge(id.est.rsf, t, by = 'subject_year')
 
-#saveRDS(id.est.rsf, paste0('./SSF/RSF_estimates_', region, '_20220325.RDS'))
+saveRDS(id.est.rsf, paste0('./SSF/RSF_estimates_20220325.RDS'))
 
 # remove intercept
 id.est.rsf <- filter(id.est.rsf, term != '(Intercept)')
