@@ -26,7 +26,8 @@ set.seed(1)
 # read data 
 #movdata <- readRDS('./SSF/eledata_expanded.rds')
 #movdata <- readRDS('./SSF/eledata_allmara.RDS')
-movdata <- readRDS("./movdata/GMEcollars_004_usedClust_2021-10-05.rds") 
+#movdata <- readRDS("./movdata/GMEcollars_004_usedClust_2021-10-05.rds") 
+movdata <- readRDS("./movdata/GMEcollars_004_usedClust_2022-04-01.rds")
 movdata <- movdata[!movdata$subject_name %in% c('Shamba','Courtney','David','Pepper','Harakati'),]
 movdata <- movdata[movdata$fixType != 'irregular',]
 movdata$uid <- 1:nrow(movdata)
@@ -108,7 +109,7 @@ dist2up <- rast("./spatial data/GSE/GSE distance rasters/dist2unprotected_estes_
 # 4 = cover70
 # 5 = degraded
 #lc <- rast("./spatial data/Tiedman/agmask_reclass.tif") # maraonly
-lc <- rast("./spatial data/Tiedman/sentinel2018-3yr-GSE-03-2022_32736_agmask.tif") #SME - temp
+lc <- rast("./spatial data/Tiedman/sentinel2018-3yr-GSE-03-2022_32736_agmask.tif") #SME - march2022
 ag <- terra::clamp(lc, lower = 1, upper = 1, values = FALSE)
 cover20 <- terra::clamp(lc, lower = 2, upper = 2, values = FALSE)
 cover2070 <- terra::clamp(lc, lower = 3, upper = 3, values = FALSE)
@@ -139,12 +140,13 @@ landuse[is.na(landuse)] <- 1
 # rasters must be in a list for mcapply
 r.list <- list(slope, ndviCoV, ag, cover20, cover2070, cover70, drains, 
                prop.settlement.250, prop.settlement.1500, gHM, 
-               roadsPrimary, roadsSecondary, dist2roads.primary, dist2roads.secondary, dist2ag, dist2paedge, dist2pa, dist2lu, dist2up, landuse)
+               dist2roads.primary, dist2roads.secondary, dist2ag, 
+               landuse, dist2paedge, dist2pa, dist2lu, dist2up)
 
 ## Extract
 study.area <- 32736
 
-## Extraction in parallel - 40 minutes
+## Extraction in parallel - 40 minutes for mara only
 # need to split up to avoid ram issues creating large terra::vect() objects. can't handle 10mil+ datasets
 split <- split(rsf.df, rsf.df$subject_name)
 cores = 7
@@ -172,18 +174,18 @@ mode(used2) = "numeric"
 used2 <- as.data.frame(used2)
 colnames(used2) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains',
                      'prop.settlement.250','prop.settlement.1500','gHM',
-                     'roadsPrimary','roadsSecondary','dist2roads.primary','dist2roads.secondary','dist2ag',
-                     'dist2paedge', 'dist2pa', 'dist2lu', 'dist2up', 'landuse')
+                     'dist2roads.primary','dist2roads.secondary','dist2ag',
+                     'landuse', 'dist2paedge', 'dist2pa', 'dist2lu', 'dist2up')
 head(used2)
 
 # unstandardized data frame
 rsf.ext <- cbind(rsf.df, used2)
 
 ## Adjust dist2edge metrics
-rsf.ext$dist2paedge <- ifelse(rsf.ext$landuse > 1, rsf.ext$dist2paedge, -rsf.ext$dist2paedge)
-rsf.ext$dist2pa <- ifelse(rsf.ext$landuse == 3, rsf.ext$dist2pa, -rsf.ext$dist2pa)
-rsf.ext$dist2lu <- ifelse(rsf.ext$landuse == 2, rsf.ext$dist2lu, -rsf.ext$dist2lu)
-rsf.ext$dist2up <- ifelse(rsf.ext$landuse == 1, rsf.ext$dist2up, -rsf.ext$dist2up)
+rsf.ext$dist2paedge <- ifelse(rsf.ext$landuse > 1, -rsf.ext$dist2paedge, rsf.ext$dist2paedge)
+rsf.ext$dist2pa <- ifelse(rsf.ext$landuse == 3, -rsf.ext$dist2pa, rsf.ext$dist2pa)
+rsf.ext$dist2lu <- ifelse(rsf.ext$landuse == 2, -rsf.ext$dist2lu, rsf.ext$dist2lu)
+rsf.ext$dist2up <- ifelse(rsf.ext$landuse == 1, -rsf.ext$dist2up, rsf.ext$dist2up)
 
 
 
@@ -220,8 +222,9 @@ t <- read.csv('./SSF/ag.homerange.IY.datatable_20220312.csv')
 
 rsf.ext <- merge(rsf.ext, t, by = 'subject_year') 
 
-# save extracted df
-write.csv(rsf.ext, './SSF/RSF_dataset_extracted_20220330.csv')
+# save extracted df and compress
+write.csv(rsf.ext, './SSF/RSF_dataset_extracted_20220401.csv')
+system('gzip ./SSF/RSF_dataset_extracted_20220401.csv')
 
 # drop old dataframes
 remove(extract)
@@ -233,7 +236,7 @@ remove(used2)
 
 ##### Save Point #####
 # Can make the following code a seperate file for model fitting
-rsf.ext <- as.data.frame(data.table::fread('./SSF/RSF_dataset_extracted_20220325.csv'))
+rsf.ext <- as.data.frame(data.table::fread('./SSF/RSF_dataset_extracted_20220401.csv.gz'))
 rsf.ext$subject_year <- as.character(rsf.ext$subject_year)
 rsf.ext$tactic.season <- as.factor(rsf.ext$tactic.season)
 rsf.ext$V1 <- NULL
@@ -247,8 +250,8 @@ rsf.ext <- filter(rsf.ext, ndviCoV > -13 & ndviCoV < 54)
 rsf.ext <- rsf.ext %>%
   mutate_at(.vars = c('slope', 'ndviCoV'), .funs = scale) %>%
   #mutate_at(.vars = c('gHM','prop.settlement.250','prop.settlement.1500'), .funs = scale)
-  mutate_at(.vars = c('ag','cover20','cover2070','cover70','drains','roadsPrimary','roadsSecondary'), .funs = function(x) if_else(!is.na(x), 1, 0)) %>%
-  mutate_at(.vars = c('ag','cover20','cover2070','cover70', 'drains','roadsPrimary','roadsSecondary'), .funs = as.factor)
+  mutate_at(.vars = c('ag','cover20','cover2070','cover70','drains'), .funs = function(x) if_else(!is.na(x), 1, 0)) %>%
+  mutate_at(.vars = c('ag','cover20','cover2070','cover70', 'drains', 'landuse'), .funs = as.factor)
 
 rsf.ext$case_ <- as.factor(rsf.ext$case_)
 rsf.ext$subject_name <- as.factor(rsf.ext$subject_name)
@@ -300,16 +303,21 @@ rsf.ext <- filter(rsf.ext, !(subject_year %in% c('Caroline-2014','Tressa-2015','
 ##### Fit Individual-level RSF #####
 ## Run in parallel 
 # fit model
+# 
+# rsf.ext$dist2lu <- ifelse(rsf.ext$dist2lu > 5000, 5000, rsf.ext$dist2lu)
+# rsf.ext$dist2lu <- ifelse(rsf.ext$dist2lu < -5000, -5000, rsf.ext$dist2lu)
+# rsf.ext$dist2up <- ifelse(rsf.ext$dist2up > 5000, 5000, rsf.ext$dist2up)
+# rsf.ext$dist2up <- ifelse(rsf.ext$dist2up < -5000, -5000, rsf.ext$dist2up)
 
 {tic()
   split <- split(rsf.ext, rsf.ext$subject_year) # subject_name or subject_year
   m.ind.rsf <- lapply(split, function(x)
-    glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(prop.settlement.250) + 
-          scale(dist2roads.primary) + scale(dist2roads.secondary), data = x, family = 'binomial'))
+    glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(prop.settlement.250) +
+          scale(dist2roads.primary) + scale(dist2roads.secondary) + scale(dist2paedge), data = x, family = 'binomial'))
 toc()}
 
 remove(split)
-saveRDS(m.ind.rsf, paste0('./SSF/RSF_modfit_20220325.RDS'))
+#saveRDS(m.ind.rsf, paste0('./SSF/RSF_modfit_20220325.RDS'))
 
 # get table of estimates for each individual
 id.est.rsf <- lapply(m.ind.rsf, function(x) 
@@ -320,16 +328,22 @@ id.est.rsf <- lapply(m.ind.rsf, function(x)
     ))
 id.est.rsf <- dplyr::bind_rows(id.est.rsf, .id = "subject_year")
 
+# test variance inflation factors
+id.vif.rsf <- lapply(m.ind.rsf, function(x) {
+  t <- car::vif(x)
+  vif <- as.data.frame(cbind(names(t), unname(t))) })
+t <- dplyr::bind_rows(id.vif.rsf, .id = "subject_year")
+t <- as.data.frame(t)
 
 # add other ele metadata (sex, ag tactic, etc.)
 t <- rsf.ext %>% group_by(subject_year, subject_name, subject_sex, tactic.season, ag.avail) %>% tally() %>% dplyr::select(-n)
 id.est.rsf <- merge(id.est.rsf, t, by = 'subject_year')
 
-saveRDS(id.est.rsf, paste0('./SSF/RSF_estimates_20220325.RDS'))
+#saveRDS(id.est.rsf, paste0('./SSF/RSF_estimates_20220325.RDS'))
 
 # remove intercept
 id.est.rsf <- filter(id.est.rsf, term != '(Intercept)')
-id.est.rsf <- filter(id.est.rsf, term != 'ag1')
+#id.est.rsf <- filter(id.est.rsf, term != 'ag1')
 ##### plot results #####
 
 # coeff estimates for all individuals
@@ -362,4 +376,54 @@ ag.est$ag.avail <- log(ag.est$ag.avail+0.0001)
 ag.est$subject_name <- as.factor(ag.est$subject_name)
 m.funct <- lme4::lmer(estimate ~ ag.avail + (1|subject_name), data = ag.est)
 sjPlot::plot_model(m.funct, type = 'pred', show.data = TRUE, title = '', axis.labels = '', dot.size = 1.5)
+
+
+##### Random Forest Clustering #####
+# Use tactic season classifications as testing for clustering
+
+# create RF table - pivot wider
+wide <- id.est.rsf %>% select(-c("std.error","statistic","p.value","ymin","ymax")) %>%
+  pivot_wider(names_from = term, values_from = estimate)
+
+## Data partition
+ind <- sample(2, nrow(wide), replace = TRUE, prob = c(0.7, 0.3))
+train <- wide[ind==1,]
+test <- wide[ind==2,]
+dim(train)
+dim(test)
+
+colnames(train) <- c("subject_year","subject_sex","tactic.season","ag.avail","cover20","cover2070","cover70","slope",
+                     "ndviCoV","drains","prop.settlement.250","dist2roads.primary","dist2roads.secondary","dist2paedge")
+
+colnames(test) <- c("subject_year","subject_sex","tactic.season","ag.avail","cover20","cover2070","cover70","slope",
+                     "ndviCoV","drains","prop.settlement.250","dist2roads.primary","dist2roads.secondary","dist2paedge")
+
+## Train
+rf <- randomForest::randomForest(tactic.season ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + 
+                                   prop.settlement.250 + dist2roads.primary + dist2roads.secondary + dist2paedge, data = train, proximity=TRUE)
+
+rf
+
+# Predict - Confusion matrix
+p1 <- predict(rf, train)
+confusionMatrix(p1, train$ Species)
+
+
+##### Random Forest Regression #####
+# Use tactic season classifications as response var in a RF regression to 
+# identify most important covariates for distinguishing clusters
+
+rf <- randomForest::randomForest(tactic.season ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + 
+                                   prop.settlement.250 + dist2roads.primary + dist2roads.secondary + dist2paedge, 
+                                 data = wide, ntree = 1000, importance=TRUE)
+
+rf
+
+
+# fit again with subject-name
+rf <- randomForest::randomForest(subject_name ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + 
+                                   prop.settlement.250 + dist2roads.primary + dist2roads.secondary + dist2paedge, 
+                                 data = wide, ntree = 1000, importance=TRUE)
+
+rf
 
