@@ -24,10 +24,10 @@ set.seed(1)
 ##### 1a. Prepare Data #####
 
 # read data 
-#movdata <- readRDS('./SSF/eledata_expanded.rds')
+movdata <- readRDS('./SSF/eledata_expanded.rds')
 #movdata <- readRDS('./SSF/eledata_allmara.RDS')
 #movdata <- readRDS("./movdata/GMEcollars_004_usedClust_2021-10-05.rds") 
-movdata <- readRDS("./movdata/GMEcollars_004_usedClust_2022-04-01.rds")
+#movdata <- readRDS("./movdata/GMEcollars_004_usedClust_2022-04-02.rds")
 movdata <- movdata[!movdata$subject_name %in% c('Shamba','Courtney','David','Pepper','Harakati'),]
 movdata <- movdata[movdata$fixType != 'irregular',]
 movdata$uid <- 1:nrow(movdata)
@@ -43,10 +43,34 @@ movdata$date <- as.POSIXct(movdata$date) # check still in EAT
 # add new variable for individual-year (name-year) that can be used to group and fit models by. Years use april cutoff
 movdata$subject_year <- paste(movdata$subject_name, movdata$year.cuts, sep = '-')
 
+# check - 
+t <- movdata %>% group_by(subject_year)
+tt <- t %>% summarise(mean = round(mean(ag.used),2))
+
+
+##### Define Seasons #####
+
+# load season windows (Ecoscope colab export)
+library(lubridate)
+seasons <- read.csv('./spatial data/season_time_windows_wetdrytrans_20112021.csv')
+seasons$start <- ymd_hms(seasons$start)
+seasons$end <- ymd_hms(seasons$end)
+# transition to dry -- based on staging paper, transition and dry season are best for detecting crop raiding season
+seasons$season <- ifelse(seasons$season != 'wet', 'dry', 'wet')
+
+# cut the dataframe by the start date of each season and label it with season name. 
+# NOTE: switch the label to `unique_season` to check that season dates and labels are matching correctly for your dataset
+rng.name <- cut(movdata$date, breaks = seasons$start, include.lowest = T, labels = head(seasons$season, -1))
+# check
+levels(rng.name)
+# create variables
+movdata$season <- rng.name
+
+
 # make a move object for the amt package - we will use the id, which is a
 #         combination of the animal's name and collar number
-track <- make_track(movdata, .x = x, .y = y, .t = date, subject_name = subject_name, subject_year = subject_year, subject_sex = subject_sex, tactic.season = tactic.season, uid = uid)
-t1 <- split(track, track$subject_year) # subject_name or subject_year
+track <- make_track(movdata, .x = x, .y = y, .t = date, subject_name = subject_name, subject_year = subject_year, 
+                    subject_sex = subject_sex, tactic.season = tactic.season, season = season, uid = uid)
 
 ##### 1b. Generate random samples #####
 #' We will use amt functions to make random samples for our models. First, we will generate random points for the rsf
@@ -58,22 +82,35 @@ t1 <- split(track, track$subject_year) # subject_name or subject_year
 # set cores
 cores = 7
 
-# create random points 
-{tic()
-rand.factor = 30 # 30:1 unused:used
-rsf.df <- do.call(rbind, t1)
-rsf.df <- split(rsf.df, rsf.df$subject_year) # split variable (subject_name or subject_year)
-rsf.df <- parallel::mclapply(rsf.df, function(x) {
-  set.seed(1)
-  rp <- x %>% amt::random_points(n = nrow(.)*rand.factor, hr = 'mcp') # 
-  rp$subject_name = unique(x$subject_name)
-  rp$subject_year = unique(x$subject_year) # update this by the split variable
-  rp$subject_sex = unique(x$subject_sex)
-  rp$tactic.season = unique(x$tactic.season)
-  return(rp) }, mc.cores = cores)
-toc()}
+# # create random points 
+# {tic()
+# rand.factor = 30 # 30:1 unused:used
+# rsf.df <- split(track, track$subject_year) # split variable (subject_name or subject_year)
+# rsf.df <- parallel::mclapply(rsf.df, function(x) {
+#   set.seed(1)
+#   rp <- x %>% amt::random_points(n = nrow(.)*rand.factor, hr = 'mcp') # 
+#   rp$subject_name = unique(x$subject_name)
+#   rp$subject_year = unique(x$subject_year) # update this by the split variable
+#   rp$subject_sex = unique(x$subject_sex)
+#   rp$tactic.season = unique(x$tactic.season)
+#   return(rp) }, mc.cores = cores)
+# toc()}
 
-t <- rsf.df
+
+# create random points - build mcp and random points by season
+{tic()
+  rand.factor = 2 # 30:1 unused:used
+  rsf.df <- split(track, list(track$subject_year, track$season)) # split variable (subject_name or subject_year)
+  rsf.df <- parallel::mclapply(rsf.df, function(x) {
+    set.seed(1)
+    rp <- x %>% amt::random_points(n = nrow(.)*rand.factor, hr = 'mcp') # 
+    rp$subject_name = unique(x$subject_name)
+    rp$subject_year = unique(x$subject_year) # update this by the split variable
+    rp$subject_sex = unique(x$subject_sex)
+    rp$tactic.season = unique(x$tactic.season)
+    rp$season = unique(x$season)
+    return(rp) }, mc.cores = cores)
+toc()}
 
 rsf.df <- do.call(rbind, rsf.df)
 
@@ -98,9 +135,11 @@ dist2roads.primary <- rast("./spatial data/Roads landDx/dist2road_primary_landDx
 dist2roads.secondary <- rast("./spatial data/Roads landDx/dist2road_secondary_landDx.tif")
 dist2ag <- rast("./spatial data/Tiedman/dist2ag_tiedman.tif")
 dist2paedge <- rast("./spatial data/dist2paedge_estes_32736_20211118.tif")
-dist2pa <- rast("./spatial data/GSE/GSE distance rasters/dist2protected_estes_32736.tif")
-dist2lu <- rast("./spatial data/GSE/GSE distance rasters/dist2limiteduse_estes_32736.tif")
-dist2up <- rast("./spatial data/GSE/GSE distance rasters/dist2unprotected_estes_32736.tif")
+pa.1000 <- rast("./spatial data/GSE/GSE Focal Rasters/protected_focal_250.tif")
+lu.1000 <- rast("./spatial data/GSE/GSE Focal Rasters/lu_focal_250.tif")
+up.1000 <- rast("./spatial data/GSE/GSE Focal Rasters/up_focal_250.tif")
+dist2settlement <- rast("./spatial data/google settlements/estes_dist2settlement_32736.tif")
+
 
 # tiedman layer
 # 1 = ag
@@ -141,7 +180,7 @@ landuse[is.na(landuse)] <- 1
 r.list <- list(slope, ndviCoV, ag, cover20, cover2070, cover70, drains, 
                prop.settlement.250, prop.settlement.1500, gHM, 
                dist2roads.primary, dist2roads.secondary, dist2ag, 
-               landuse, dist2paedge, dist2pa, dist2lu, dist2up)
+               landuse, dist2paedge, pa.1000,lu.1000,up.1000,dist2settlement)
 
 ## Extract
 study.area <- 32736
@@ -175,7 +214,7 @@ used2 <- as.data.frame(used2)
 colnames(used2) <- c('slope','ndviCoV','ag','cover20','cover2070','cover70','drains',
                      'prop.settlement.250','prop.settlement.1500','gHM',
                      'dist2roads.primary','dist2roads.secondary','dist2ag',
-                     'landuse', 'dist2paedge', 'dist2pa', 'dist2lu', 'dist2up')
+                     'landuse','dist2paedge','pa.1000','lu.1000','up.1000','dist2settlement')
 head(used2)
 
 # unstandardized data frame
@@ -183,10 +222,6 @@ rsf.ext <- cbind(rsf.df, used2)
 
 ## Adjust dist2edge metrics
 rsf.ext$dist2paedge <- ifelse(rsf.ext$landuse > 1, -rsf.ext$dist2paedge, rsf.ext$dist2paedge)
-rsf.ext$dist2pa <- ifelse(rsf.ext$landuse == 3, -rsf.ext$dist2pa, rsf.ext$dist2pa)
-rsf.ext$dist2lu <- ifelse(rsf.ext$landuse == 2, -rsf.ext$dist2lu, rsf.ext$dist2lu)
-rsf.ext$dist2up <- ifelse(rsf.ext$landuse == 1, -rsf.ext$dist2up, rsf.ext$dist2up)
-
 
 
 # ##### Add Ag Availability for Homerange
@@ -223,8 +258,8 @@ t <- read.csv('./SSF/ag.homerange.IY.datatable_20220312.csv')
 rsf.ext <- merge(rsf.ext, t, by = 'subject_year') 
 
 # save extracted df and compress
-write.csv(rsf.ext, './SSF/RSF_dataset_extracted_20220401.csv')
-system('gzip ./SSF/RSF_dataset_extracted_20220401.csv')
+write.csv(rsf.ext, './SSF/RSF_dataset_extracted_20220402.csv')
+system('gzip ./SSF/RSF_dataset_extracted_20220402.csv')
 
 # drop old dataframes
 remove(extract)
@@ -271,6 +306,15 @@ t <- rsf.ext %>% group_by(subject_year) %>%
 rsf.ext<- filter(rsf.ext, subject_year %in% t$subject_year)
 rsf.ext <- filter(rsf.ext, !(subject_year %in% c('Caroline-2014','Tressa-2015','Chelsea-2016','Jinomoja-2018','Jinomoja-2019','Jinomoja-2020')))
 
+
+## add extra metadata
+ref <- rsf.ext
+
+t <- movdata %>% group_by(subject_year, region, tactic.season) %>% rename(tactic.season.new = tactic.season) %>% 
+  tally() %>% select(-n)
+
+rsf.ext <- merge(rsf.ext, t, by = 'subject_year')
+dim(rsf.ext)
 
 # # fit pop model
 # m <- glm(case_ ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + scale(gHM), data = rsf.ext, family = binomial)
@@ -336,7 +380,7 @@ t <- dplyr::bind_rows(id.vif.rsf, .id = "subject_year")
 t <- as.data.frame(t)
 
 # add other ele metadata (sex, ag tactic, etc.)
-t <- rsf.ext %>% group_by(subject_year, subject_name, subject_sex, tactic.season, ag.avail) %>% tally() %>% dplyr::select(-n)
+t <- rsf.ext %>% group_by(subject_year, subject_name, subject_sex, tactic.season, tactic.season.new, region, ag.avail) %>% tally() %>% dplyr::select(-n)
 id.est.rsf <- merge(id.est.rsf, t, by = 'subject_year')
 
 #saveRDS(id.est.rsf, paste0('./SSF/RSF_estimates_20220325.RDS'))
@@ -363,7 +407,7 @@ ggplot(id.est.rsf, aes(x = as.factor(term), y = estimate, color = subject_sex)) 
   coord_flip()
 
 # coeff estimates by tactic (IY)
-ggplot(id.est.rsf, aes(x = as.factor(term), y = estimate, color = factor(tactic.season))) +
+ggplot(id.est.rsf, aes(x = as.factor(term), y = estimate, color = factor(tactic.season.new))) +
   geom_boxplot() +
   xlab('covariate') + ggtitle('rsf individual-level estimates by ag tactic') +
   labs(color = 'ag tactic (year)') + 
@@ -375,15 +419,21 @@ plot(ag.est$ag.avail, ag.est$estimate)
 ag.est$ag.avail <- log(ag.est$ag.avail+0.0001)
 ag.est$subject_name <- as.factor(ag.est$subject_name)
 m.funct <- lme4::lmer(estimate ~ ag.avail + (1|subject_name), data = ag.est)
-sjPlot::plot_model(m.funct, type = 'pred', show.data = TRUE, title = '', axis.labels = '', dot.size = 1.5)
+sjPlot::plot_model(m.funct, terms = "ag.avail [all]", type = 'pred', show.data = TRUE, title = '', axis.labels = '', dot.size = 1.5)
 
 
 ##### Random Forest Clustering #####
 # Use tactic season classifications as testing for clustering
 
 # create RF table - pivot wider
-wide <- id.est.rsf %>% select(-c("std.error","statistic","p.value","ymin","ymax")) %>%
-  pivot_wider(names_from = term, values_from = estimate)
+wide <- id.est.rsf %>% select(-c("std.error","statistic","p.value","ymin","ymax","subject_name")) %>%
+  pivot_wider(names_from = term, values_from = estimate) %>%
+  filter(ag1 != 0) 
+#wide$tactic.season <- ifelse(wide$tactic.season == 3, 2, wide$tactic.season)
+
+colnames(wide) <- c("subject_year","subject_sex","tactic.season","tactic.season.new","region","ag.avail","ag","cover20","cover2070","cover70","slope",
+                    "ndviCoV","drains","prop.settlement.250","dist2roads.primary","dist2roads.secondary","dist2paedge")
+
 
 ## Data partition
 ind <- sample(2, nrow(wide), replace = TRUE, prob = c(0.7, 0.3))
@@ -392,37 +442,43 @@ test <- wide[ind==2,]
 dim(train)
 dim(test)
 
-colnames(train) <- c("subject_year","subject_sex","tactic.season","ag.avail","cover20","cover2070","cover70","slope",
+colnames(train) <- c("subject_year","subject_sex","tactic.season","tactic.season.new","region","ag.avail","ag","cover20","cover2070","cover70","slope",
                      "ndviCoV","drains","prop.settlement.250","dist2roads.primary","dist2roads.secondary","dist2paedge")
 
-colnames(test) <- c("subject_year","subject_sex","tactic.season","ag.avail","cover20","cover2070","cover70","slope",
-                     "ndviCoV","drains","prop.settlement.250","dist2roads.primary","dist2roads.secondary","dist2paedge")
+colnames(test) <- c("subject_year","subject_sex","tactic.season","tactic.season.new","region","ag.avail","ag","cover20","cover2070","cover70","slope",
+                    "ndviCoV","drains","prop.settlement.250","dist2roads.primary","dist2roads.secondary","dist2paedge")
 
 ## Train
-rf <- randomForest::randomForest(tactic.season ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + 
-                                   prop.settlement.250 + dist2roads.primary + dist2roads.secondary + dist2paedge, data = train, proximity=TRUE)
+rf <- randomForest::randomForest(as.factor(tactic.season.new) ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + 
+                                   prop.settlement.250 + dist2roads.primary + dist2roads.secondary + dist2paedge + region, 
+                                 data = train, ntree = 1000, proximity=TRUE)
 
 rf
 
 # Predict - Confusion matrix
-p1 <- predict(rf, train)
-confusionMatrix(p1, train$ Species)
+p1 <- predict(rf, test)
+caret::confusionMatrix(p1, as.factor(test$tactic.season))
 
 
 ##### Random Forest Regression #####
 # Use tactic season classifications as response var in a RF regression to 
 # identify most important covariates for distinguishing clusters
 
-rf <- randomForest::randomForest(tactic.season ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + 
-                                   prop.settlement.250 + dist2roads.primary + dist2roads.secondary + dist2paedge, 
+
+wide$subject_name <- stringr::str_extract(wide$subject_year, "[^-]+")
+
+rf <- randomForest::randomForest(as.numeric(as.factor(subject_year)) ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + 
+                                   prop.settlement.250 + dist2roads.primary + dist2roads.secondary + dist2paedge + region, 
                                  data = wide, ntree = 1000, importance=TRUE)
 
 rf
 
+randomForest::varImpPlot(rf)
+randomForest::importance(rf)
 
 # fit again with subject-name
 rf <- randomForest::randomForest(subject_name ~ ag + cover20 + cover2070 + cover70 + slope + ndviCoV + drains + 
-                                   prop.settlement.250 + dist2roads.primary + dist2roads.secondary + dist2paedge, 
+                                   prop.settlement.250 + dist2roads.primary + dist2roads.secondary + dist2paedge + region, 
                                  data = wide, ntree = 1000, importance=TRUE)
 
 rf
