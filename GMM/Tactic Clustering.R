@@ -11,7 +11,7 @@ library(dplyr)
 source("GME_functions.R")
 
 ##### Data Prep #####
-movdat <- readRDS('./movdata/GMEcollars_004_usedFilter_2021-10-05.rds')
+movdat <- readRDS('./movdata/GMEcollars_004_usedFilter_2022-04-01.rds')
 movdat$ag.used <- ifelse(movdat$lc.estes == 1, 1, 0) 
 
 ##### Add Crop-Based Year Cuts #####
@@ -35,8 +35,8 @@ movdat$month <- month(movdat$date)
 # check
 summary(movdat$year.cuts)
 
-# # export movdata with season and year cuts
-# saveRDS(movdat, paste0('./movdata/GMEcollars_004_usedFiltercuts_', Sys.Date(),'.rds'))
+# export movdata with season and year cuts
+saveRDS(movdat, paste0('./movdata/GMEcollars_004_usedFiltercuts_', Sys.Date(),'.rds'))
 
 
 # dataframe for fitting - add custom filters here as needed (e.g. region-specific)
@@ -44,6 +44,7 @@ df <- movdat
   
 ##### Mean Ag use #####
 ag.mean <- df %>%
+  filter(!is.na(ag.used)) %>%
   group_by(subject_name) %>%
   summarise(n = n(),
             mean.occupancy = mean(ag.used))
@@ -275,6 +276,6 @@ sd(test.err.3)
   saveRDS(clust.result, outfile)}
 
 # save top model for further analysis
-saveRDS(m1, paste0('./GMM/results/mSelect_', Sys.Date(), '.rds'))
+saveRDS(m1.mean, paste0('./GMM/results/mSelect_', Sys.Date(), '.rds'))
 
 

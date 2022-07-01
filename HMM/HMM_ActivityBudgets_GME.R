@@ -135,11 +135,27 @@ agWindow
 # landUse <- plot_budget(t = output.plot, facet = viterbi ~ pa.2, title = "GME: Activity budget by land use type")
 # landUse
 # budget by ag tactic
-tactic <- plot_budget(t = output.plot, facet = viterbi ~ tactic.season, title = "GME: Activity budget by tactic")
+tactic <- plot_budget(t = output.plot, facet = viterbi ~ tactic.season, title = "")
 tactic
 
 
-
+tactic <- ggplot() +
+  facet_grid(viterbi~tactic.season) +
+  geom_density(data = output.plot, aes(x = hour(date),
+                              fill = factor(viterbi)), alpha = 0.3, adjust = 1.5) +
+  
+  # add sunrise/sunset
+  geom_vline(xintercept=6
+             ,color="dark grey", linetype="dashed", size=1) +
+  geom_vline(xintercept=18,
+             color="dark grey", linetype="dashed", size=1) +
+  
+  # add colors
+  scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("State")) +
+  #scale_colour_manual(values = c('black' ), name = c("Ag Use Phase")) +
+  xlab("Hour (0-23)") + ylab('Density')
+tactic
+ggsave('HMM_ActivityBudget_Tactic.tiff', dpi = 300)
 
 
 ## Budget by tactic and ag window
@@ -149,26 +165,51 @@ levels(output.plot$ag.window) <- c('Out of Phase', 'In Phase')
 t0 <- filter(output.plot, ag.window == 'Out of Phase')
 t1 <- filter(output.plot, ag.window == 'In Phase') # rare individuals do not have enough points
 
+## Only ag phase
+tactic.agonly <- ggplot() +
+  facet_grid(viterbi~tactic.season) +
+  geom_density(data = t1, aes(x = hour(date),
+                                       fill = factor(viterbi), color = 'red'), alpha = 0.3, adjust = 1.5) +
+  
+  # add sunrise/sunset
+  geom_vline(xintercept=6
+             ,color="dark grey", linetype="dashed", size=1) +
+  geom_vline(xintercept=18,
+             color="dark grey", linetype="dashed", size=1) +
+  
+  # add colors
+  scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("State")) +
+  scale_colour_manual(values = c('red' ), name = c("Ag Use Phase")) +
+  xlab("Hour (0-23)") + ylab('Density')
+tactic.agonly
+ggsave('HMM_ActivityBudget_AgTacticOnly.tiff', dpi = 300, width = 8.19, height = 5.1)
 
 
-# ag.tactic <- ggplot() +
-#   facet_grid(viterbi~tactic.season) +
-#   geom_density(data = t0, aes(x = hour(date),
-#                    fill = factor(viterbi), colour = factor(ag.window)), alpha = 0.3, adjust = 1.5) +
-#   geom_density(data = t1, aes(x = hour(date),
-#                               fill = factor(viterbi), colour = factor(ag.window)), alpha = 0.3, adjust = 1.5) +
-#   
-#   # add sunrise/sunset
-#   geom_vline(xintercept=6
-#              ,color="dark grey", linetype="dashed", size=1) + 
-#   geom_vline(xintercept=18,
-#            color="dark grey", linetype="dashed", size=1) +
-# 
-#   # add colors
-#   scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("State")) +
-#   scale_colour_manual(values = c("black", 'red' ), name = c("Ag Use Phase")) +
-#   xlab("Hour (0-23)") + ylab('Density')
-# ag.tactic
+## Combined
+
+ag.tactic <- ggplot() +
+  facet_grid(viterbi~tactic.season) +
+  geom_density(data = t0, aes(x = hour(date),
+                   fill = factor(viterbi), colour = factor(ag.window)), alpha = 0.3, adjust = 1.5) +
+  geom_density(data = t1, aes(x = hour(date),
+                              fill = factor(viterbi), colour = factor(ag.window)), alpha = 0.3, adjust = 1.5) +
+
+  # add sunrise/sunset
+  geom_vline(xintercept=6
+             ,color="dark grey", linetype="dashed", size=1) +
+  geom_vline(xintercept=18,
+           color="dark grey", linetype="dashed", size=1) +
+
+  # add colors
+  scale_fill_manual(values = c("#E69F00", "#56B4E9", "#009E73"), name = c("State")) +
+  scale_colour_manual(values = c("red", 'black' ), name = c("Ag Use Phase")) +
+  xlab("Hour (0-23)") + ylab('Density')
+ag.tactic
+ggsave('HMM_ActivityBudget_AgTactic.tiff', dpi = 300)
+
+
+
+
 
 ag.tactic.bw <- ggplot() +
   facet_grid(viterbi~tactic.season) +

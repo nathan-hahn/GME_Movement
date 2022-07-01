@@ -3,7 +3,7 @@
 library(dplyr)
 library(lubridate)
 
-movdat <- readRDS('./movdata/GMEcollars_004_used_2021-10-05.rds')
+movdat <- readRDS('./movdata/GMEcollars_004_used_2022-04-01.rds')
 
 gr <- movdat %>%
   filter(site == "gr") %>%

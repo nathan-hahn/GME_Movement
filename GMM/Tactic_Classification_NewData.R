@@ -20,10 +20,9 @@ source('GME_functions.R')
 
 # Load cluster results table
 
-movdat <- readRDS('./movdata/GMEcollars_004_usedFiltercuts_2021-10-05.rds')
+movdat <- readRDS('./movdata/GMEcollars_004_usedFiltercuts_2022-04-01.rds')
 
-mod <- readRDS('./GMM/results/mSelect_2020-10-30.rds')
-
+mod <- readRDS('./GMM/results/mselect_2022-04-04.rds')
 
 ##### Get cut points for the ag classes #####
 cut.points <- vector()
@@ -39,9 +38,13 @@ cut.points*100
 
 ag.mean <- movdat %>%
   mutate(year.cuts = as.character(year.cuts)) %>%
-  group_by(subject_name) %>%
+  group_by(subject_name, year.cuts) %>%
+  filter(!is.na(ag.used)) %>%
   summarise(n = n(),
             mean.occupancy = mean(ag.used))
+
+ag.mean$mean.occupancy <- ifelse(is.na(ag.mean$mean.occupancy), 0, ag.mean$mean.occupancy)
+
 mod.predict <- predict.Mclust(mod, ag.mean$mean.occupancy)
 
 # create result table for each season year
@@ -59,8 +62,11 @@ for(i in 1:length(split)) {
   ag.mean <- split[[i]] %>%
     mutate(year.cuts = as.character(year.cuts)) %>%
     group_by(subject_name, subject_sex, subject_ageClass, site, region, year.cuts, cut.date) %>%
+    filter(!is.na(ag.used)) %>%
     summarise(n = n(),
               mean.occupancy = mean(ag.used))
+  ag.mean$mean.occupancy <- ifelse(is.na(ag.mean$mean.occupancy), 0, ag.mean$mean.occupancy)
+  
   mod.predict[[i]] <- predict.Mclust(mod, ag.mean$mean.occupancy)
   
   # create result table for each season year
@@ -142,8 +148,8 @@ clust.df <- do.call(rbind, result) %>%
   as.data.frame() 
 
 ##### Export #####
-saveRDS(clust.df, './movdata/GMEcollars_004_usedClust_2021-10-05.rds')
+saveRDS(clust.df, './movdata/GMEcollars_004_usedClust_2022-04-04.rds')
 
 
-
+clust.df <- readRDS('./movdata/GMEcollars_004_usedClust_2022-04-02.rds')
 
