@@ -27,6 +27,7 @@ library(lubridate)
 #result.matrix <- readRDS('stage_loop_result_pct T2.1 seq0 GME_004.RDS') # original 6am - 6pm
 #result.matrix <- readRDS('./Staging Areas/pct loop tests/HMMloop_6to21_seq0_20211223.RDS')
 result.matrix <- readRDS('./Staging Areas/pct loop tests/HMMloop_6to21_seq0_agmask_20220105.RDS')
+result.matrix <- readRDS('./Staging Areas/pct loop tests/HMMloop_6to21_seq0_agmask_20220601.RDS')
 
 # convert matrix to dataframe for viz
 result.df <- as.data.frame(result.matrix)
